@@ -1,17 +1,18 @@
 import bcrypt from 'bcryptjs';
 import User from './models/User.js';
-import TimeEntry from './models/TimeEntry.js';
-import Project from './models/Project.js';
-import SubProject from './models/SubProject.js';
-import ActivityType from './models/ActivityType.js';
-import TeamMember from './models/TeamMember.js';
-import Company from './models/Company.js';
-import Stakeholder from './models/Stakeholder.js';
+import { connectDB } from './config/db.js';
 
 export async function seedDatabase() {
-  const count = await User.countDocuments();
+  console.log('Seeding initial users...');
 
-  console.log('Database is empty. Seeding initial users...');
+  // Optional: You can delete existing users if you want a complete wipe each time:
+  // await User.deleteMany({});
+
+  const exists = await User.findOne({ email: 'superadmin@workpulse.com' });
+  if (exists) {
+    console.log('Superadmin already exists! Skipping seeding.');
+    return;
+  }
 
   const hashedPassword = await bcrypt.hash('admin@123', 10);
 
@@ -26,25 +27,15 @@ export async function seedDatabase() {
   console.log('Database seeded with superadmin (email: superadmin@workpulse.com, password: admin@123)');
 }
 
-// Wipe all users and their related data, then re-seed
-export async function resetAndSeed() {
-  console.log('Removing all users and their related data...');
-
-  const userIds = (await User.find({}, '_id')).map(u => u._id);
-
-  await Promise.all([
-    TimeEntry.deleteMany({ userId: { $in: userIds } }),
-    SubProject.deleteMany({ createdBy: { $in: userIds } }),
-    Project.deleteMany({ createdBy: { $in: userIds } }),
-    ActivityType.deleteMany({ createdBy: { $in: userIds } }),
-    TeamMember.deleteMany({ createdBy: { $in: userIds } }),
-    Company.deleteMany({ createdBy: { $in: userIds } }),
-    Stakeholder.deleteMany({ createdBy: { $in: userIds } }),
-    User.deleteMany({}),
-  ]);
-
-  console.log('All data cleared.');
-  await seedDatabase();
+// Run executed directly
+if (process.argv[1] && process.argv[1].endsWith('seed.js')) {
+  connectDB()
+    .then(async () => {
+      await seedDatabase();
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
 }
-
-
