@@ -15,36 +15,16 @@ export async function seedDatabase() {
   console.log('Database is empty. Seeding initial users...');
 
   const hashedPassword = await bcrypt.hash('admin@123', 10);
-  const employeePassword = await bcrypt.hash('employee@123', 10);
 
-  const superAdmin = await User.create({
+  await User.create({
     name: 'Super Admin',
-    email: 'superadmin@adventz.com',
+    email: 'superadmin@workpulse.com',
     roles: ['Superadmin'],
     password: hashedPassword,
     active: true
   });
 
-  const employees = [
-    { name: 'Amit Rungta', email: 'amit.rungta@adventz.com' },
-    { name: 'Rahul Sharma', email: 'rahul.sharma@adventz.com' },
-    { name: 'Talha Parkar', email: 'talha.parkar@adventz.com' },
-    { name: 'Priya Patel', email: 'priya.patel@adventz.com' },
-    { name: 'Sanjay Gupta', email: 'sanjay.gupta@adventz.com' },
-    { name: 'Neha Verma', email: 'neha.verma@adventz.com' },
-  ];
-
-  for (const emp of employees) {
-    await User.create({
-      name: emp.name,
-      email: emp.email,
-      roles: ['Employee'],
-      password: employeePassword,
-      active: true
-    });
-  }
-
-  console.log('Database seeded with users (password for employees: employee@123, superadmin: admin@123)');
+  console.log('Database seeded with superadmin (email: superadmin@workpulse.com, password: admin@123)');
 }
 
 // Wipe all users and their related data, then re-seed
@@ -68,21 +48,4 @@ export async function resetAndSeed() {
   await seedDatabase();
 }
 
-// Run directly: node seed.js [--reset]
-// No flag or --reset: wipes everything and re-seeds
-// --run: only seeds if DB is empty
-const args = process.argv.slice(2);
-if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` || args.length > 0) {
-  import('./config/db.js').then(async ({ connectDB }) => {
-    await connectDB();
-    if (args.includes('--run')) {
-      await seedDatabase();
-    } else {
-      await resetAndSeed();
-    }
-    process.exit(0);
-  }).catch(err => {
-    console.error(err);
-    process.exit(1);
-  });
-}
+
