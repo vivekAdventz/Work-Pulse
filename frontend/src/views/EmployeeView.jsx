@@ -312,7 +312,6 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
           </div>
           <ConfigManager title="Companies" items={userCompanies} onAdd={handleAddItem('companies', user.id)} onDelete={handleDeleteItem('companies')} onUpdate={handleUpdateItem('companies')} />
           <ConfigManager title="Stakeholders" items={userStakeholders} onAdd={handleAddItem('stakeholders', user.id)} onDelete={handleDeleteItem('stakeholders')} onUpdate={handleUpdateItem('stakeholders')} />
-          <ConfigManager title="Activity Types" items={userActivityTypes} onAdd={handleAddItem('activityTypes', user.id)} onDelete={handleDeleteItem('activityTypes')} onUpdate={handleUpdateItem('activityTypes')} />
           <ConfigManager title="Team Members" items={userTeamMembers} onAdd={handleAddItem('teamMembers', user.id)} onDelete={handleDeleteItem('teamMembers')} onUpdate={handleUpdateItem('teamMembers')} />
         </div>
       )}

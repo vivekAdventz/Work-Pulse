@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import api from '../api';
 import { PlusIcon, EditIcon, DeleteIcon } from '../components/Icons';
 
@@ -30,6 +30,17 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
         setUsers(allUsers.map((u) => (u.id === userId ? updatedUser : u)));
       } catch (error) {
         alert(`Failed to update user status: ${error.message}`);
+      }
+    }
+  };
+
+  const handleDeleteClick = async (userId) => {
+    if (window.confirm('Are you sure you want to completely delete this user and all associated records? This action cannot be undone.')) {
+      try {
+        await api.deleteItem('users', userId);
+        setUsers(allUsers.filter((u) => u.id !== userId));
+      } catch (error) {
+        alert(`Failed to delete user: ${error.message}`);
       }
     }
   };
@@ -146,7 +157,7 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-4">
                       <button onClick={() => handleEditClick(u)} className="text-slate-500 hover:text-sky-600 transition-colors"><EditIcon /></button>
-                      <button className="text-slate-500 hover:text-red-600 transition-colors"><DeleteIcon /></button>
+                      <button onClick={() => handleDeleteClick(u.id)} className="text-slate-500 hover:text-red-600 transition-colors"><DeleteIcon /></button>
                     </td>
                   </tr>
                 ))}
