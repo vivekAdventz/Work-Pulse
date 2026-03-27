@@ -3,7 +3,7 @@ import app from './app.js';
 import { connectDB } from './config/db.js';
 import { seedDatabase } from './seed.js';
 
-const PORT = process.env.PORT || 5207;
+const PORT = process.env.PORT || 5000;
 
 connectDB()
   .then(async () => {
