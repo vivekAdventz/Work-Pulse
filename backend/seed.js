@@ -10,7 +10,6 @@ import Stakeholder from './models/Stakeholder.js';
 
 export async function seedDatabase() {
   const count = await User.countDocuments();
-  if (count > 0) return;
 
   console.log('Database is empty. Seeding initial users...');
 
