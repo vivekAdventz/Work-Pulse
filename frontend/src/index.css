@@ -1,16 +1,36 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
   font-family: 'Inter', sans-serif;
+  /* Prevent blue highlight on tap in mobile chrome/webview */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Make it feel like a native app: prevent text selection on UI elements */
+button, 
+nav, 
+.header, 
+.sidebar,
+svg {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Allow selection only in main content or inputs if needed */
+input, 
+textarea, 
+main {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
+/* ... existing scrollbar styles ... */
 ::-webkit-scrollbar-track {
   background: #f1f5f9;
 }

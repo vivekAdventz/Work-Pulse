@@ -242,7 +242,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
           {dashboardViewMode === 'table' ? (
             <>
               {/* Filters */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-4 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-4 text-sm">
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Date</label>
               <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white" />
