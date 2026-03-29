@@ -11,7 +11,10 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
     <div className="flex h-screen bg-slate-100">
       <aside className={`w-64 flex-shrink-0 bg-white border-r border-slate-200 p-4 flex-col absolute inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-30 flex`}>
         <div className="h-16 flex items-center justify-between font-bold text-3xl text-sky-600 border-b border-slate-200">
-          <span>Workpulse</span>
+          <div className="flex items-center gap-2">
+            <img src="/favicon.png" alt="Icon" className="h-8 w-8 rounded-lg shadow-sm" />
+            <span>Workpulse</span>
+          </div>
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-slate-500">
             &times;
           </button>
@@ -44,9 +47,9 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
             </button>
             <img src="https://www.zuariindustries.in/assets/web/img/logo/zuari_logo.png" alt="Zuari Logo" className="h-8 md:h-10 object-contain drop-shadow-sm" />
           </div>
-          <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-2 md:gap-4 ml-auto">
             {hasBothRoles && onToggleRole && (
-              <div className="flex items-center bg-slate-100 rounded-lg p-1">
+              <div className="hidden md:flex items-center bg-slate-100 rounded-lg p-1">
                 <button
                   onClick={() => onToggleRole('Employee')}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeRole === 'Employee' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
@@ -62,16 +65,19 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
               </div>
             )}
             {onGenerateSummary && (
-              <button onClick={onGenerateSummary} title="Generate AI Summary" className="p-2 text-white bg-indigo-500 hover:bg-indigo-600 rounded-full transition-colors flex flex-row px-4 mr-3 items-center gap-2 shadow-sm font-medium">
-                <SparklesIcon /> AI Summary
+              <button onClick={onGenerateSummary} title="Generate AI Summary" className="p-2 text-white bg-indigo-500 hover:bg-indigo-600 rounded-full transition-colors flex items-center justify-center sm:px-4 shadow-sm font-medium">
+                <SparklesIcon /> <span className="hidden sm:inline ml-2">AI Summary</span>
               </button>
             )}
             {onDownloadCsv && (
-              <button onClick={onDownloadCsv} title="Download CSV" className="p-2 text-white bg-sky-500 hover:bg-sky-600 rounded-full transition-colors flex flex-row px-4 mr-3 items-center gap-2 shadow-sm font-medium">
-                <DownloadIcon /> CSV
+              <button onClick={onDownloadCsv} title="Download CSV" className="p-2 text-white bg-sky-500 hover:bg-sky-600 rounded-full transition-colors flex items-center justify-center sm:px-4 shadow-sm font-medium">
+                <DownloadIcon /> <span className="hidden sm:inline ml-2">CSV</span>
               </button>
             )}
-            <span className="text-slate-600 text-sm font-medium text-right mr-2">Welcome, {user.name} <br />({activeRole || user.roles?.join(', ')})</span>
+            <div className="hidden sm:flex flex-col text-right mr-2">
+              <span className="text-slate-600 text-xs font-semibold whitespace-nowrap">Welcome, {user.name.split(' ')[0]}</span>
+              <span className="text-slate-400 text-[10px] uppercase tracking-wider">({activeRole || user.roles?.join(', ')})</span>
+            </div>
             <img src="https://www.zuariindustries.in/assets/web/img/logo/adventz.png" alt="Adventz Logo" className="h-8 md:h-10 object-contain hidden lg:block drop-shadow-sm" />
           </div>
         </header>
