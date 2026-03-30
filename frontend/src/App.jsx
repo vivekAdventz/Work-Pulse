@@ -142,10 +142,26 @@ export default function App() {
         CapacitorApp.addListener('appUrlOpen', async (event) => {
           if (event.url.startsWith('msauth://')) {
             try {
-              // Close the in-app browser so the user sees the app
+              // 1. Close the in-app browser so the user sees the app
               await Browser.close();
-              // Pass the redirect URL to MSAL so it can extract the auth code
-              const response = await msalInstance.handleRedirectPromise(event.url);
+
+              // 2. MSAL's handleRedirectPromise() reads auth code from window.location
+              //    (NOT from a passed URL). Extract params from the deep link and
+              //    push them onto the current page so MSAL can find them.
+              try {
+                const deepLink = new URL(event.url);
+                const params = deepLink.searchParams.toString();
+                const hash = deepLink.hash;
+                const newUrl =
+                  window.location.origin +
+                  window.location.pathname +
+                  (params ? '?' + params : '') +
+                  (hash || '');
+                window.history.replaceState({}, document.title, newUrl);
+              } catch (_) { /* malformed URL — carry on */ }
+
+              // 3. Now MSAL can read the code from window.location
+              const response = await msalInstance.handleRedirectPromise();
               if (response?.accessToken) {
                 const result = await api.microsoftLogin(response.accessToken);
                 localStorage.setItem('authToken', result.token);
