@@ -8,17 +8,17 @@ export async function seedDatabase() {
   // Optional: You can delete existing users if you want a complete wipe each time:
   // await User.deleteMany({});
 
-  const exists = await User.findOne({ email: 'superadmin@workpulse.com' });
+  const exists = await User.findOne({ email: 'superadmin@adventz.com' });
   if (exists) {
     console.log('Superadmin already exists! Skipping seeding.');
     return;
   }
 
-  const hashedPassword = await bcrypt.hash('admin@123', 10);
+  const hashedPassword = await bcrypt.hash('superadmin@1234', 10);
 
   await User.create({
     name: 'Super Admin',
-    email: 'superadmin@workpulse.com',
+    email: 'superadmin@adventz.com',
     roles: ['Superadmin'],
     password: hashedPassword,
     active: true
