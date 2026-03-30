@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 import api from './api';
 import LoginScreen from './components/LoginScreen';
 import SuperadminLogin from './components/SuperadminLogin';
 import SuperadminView from './views/SuperadminView';
 import ManagerView from './views/ManagerView';
 import EmployeeView from './views/EmployeeView';
+import { isCapacitorApp } from './msalConfig';
 
 function AuthenticatedApp({ currentUser, setCurrentUser }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -131,23 +134,48 @@ export default function App() {
 
   useEffect(() => {
     const init = async () => {
-      // Handle Microsoft redirect response if returning from MS login
-      try {
-        const { msalInstance } = await import('./msalConfig');
-        await msalInstance.initialize();
-        const response = await msalInstance.handleRedirectPromise();
-        if (response?.accessToken) {
-          const result = await api.microsoftLogin(response.accessToken);
-          localStorage.setItem('authToken', result.token);
-          localStorage.setItem('currentUser', JSON.stringify(result.user));
-          setCurrentUser(result.user);
-          setIsInitLoading(false);
-          return;
+      const { msalInstance } = await import('./msalConfig');
+      await msalInstance.initialize();
+
+      if (isCapacitorApp) {
+        // === MOBILE: listen for the msauth:// deep link fired after in-app browser login ===
+        CapacitorApp.addListener('appUrlOpen', async (event) => {
+          if (event.url.startsWith('msauth://')) {
+            try {
+              // Close the in-app browser so the user sees the app
+              await Browser.close();
+              // Pass the redirect URL to MSAL so it can extract the auth code
+              const response = await msalInstance.handleRedirectPromise(event.url);
+              if (response?.accessToken) {
+                const result = await api.microsoftLogin(response.accessToken);
+                localStorage.setItem('authToken', result.token);
+                localStorage.setItem('currentUser', JSON.stringify(result.user));
+                setCurrentUser(result.user);
+              }
+            } catch (e) {
+              console.error('Mobile SSO callback failed:', e);
+              setSsoError(e.message || 'SSO Login Failed. Please try again.');
+              setTimeout(() => setSsoError(null), 8000);
+            }
+          }
+        });
+      } else {
+        // === WEB: handle the standard redirect response on page load ===
+        try {
+          const response = await msalInstance.handleRedirectPromise();
+          if (response?.accessToken) {
+            const result = await api.microsoftLogin(response.accessToken);
+            localStorage.setItem('authToken', result.token);
+            localStorage.setItem('currentUser', JSON.stringify(result.user));
+            setCurrentUser(result.user);
+            setIsInitLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.error('Microsoft redirect login failed:', e);
+          setSsoError(e.message || 'SSO Login Failed: User not found or unauthorized.');
+          setTimeout(() => setSsoError(null), 8000);
         }
-      } catch (e) {
-        console.error('Microsoft redirect login failed:', e);
-        setSsoError(e.message || 'SSO Login Failed: User not found or unauthorized.');
-        setTimeout(() => setSsoError(null), 8000);
       }
 
       // Normal session restore — validate token before restoring

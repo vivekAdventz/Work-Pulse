@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import api from '../api';
-import { msalInstance, loginRequest, isCapacitorApp } from '../msalConfig';
+import { msalInstance, loginRequest } from '../msalConfig';
 
 function TimesheetIllustration() {
   return (
@@ -78,26 +78,9 @@ export default function LoginScreen({ onLogin }) {
     setIsLoading(true);
     try {
       await msalInstance.initialize();
-
-      if (isCapacitorApp) {
-        // === MOBILE (Capacitor) ===
-        // loginPopup stays inside the WebView — the result is returned directly here.
-        // loginRedirect would leave the user in Chrome with no way back to the app.
-        const response = await msalInstance.loginPopup(loginRequest);
-        if (response?.accessToken) {
-          const result = await api.microsoftLogin(response.accessToken);
-          localStorage.setItem('authToken', result.token);
-          localStorage.setItem('currentUser', JSON.stringify(result.user));
-          onLogin(result.user);
-        }
-      } else {
-        // === WEB BROWSER ===
-        // Standard redirect flow — App.jsx handleRedirectPromise() catches the response on return.
-        await msalInstance.loginRedirect(loginRequest);
-      }
+      await msalInstance.loginRedirect(loginRequest);
     } catch (e) {
       setError(e.message || 'An error occurred during login.');
-    } finally {
       setIsLoading(false);
     }
   };
