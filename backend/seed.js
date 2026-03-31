@@ -1,3 +1,4 @@
+import './config/env.js'; // loads dotenv and validates env vars
 import bcrypt from 'bcryptjs';
 import User from './models/User.js';
 import { connectDB } from './config/db.js';

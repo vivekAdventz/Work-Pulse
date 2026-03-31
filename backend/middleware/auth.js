@@ -1,6 +1,5 @@
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'adventz-timesheet-secret-key';
+import { JWT_SECRET } from '../config/env.js';
 
 export function generateToken(user) {
   return jwt.sign(
