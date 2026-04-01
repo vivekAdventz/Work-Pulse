@@ -88,6 +88,18 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   };
 
   const handleDeleteItem = (key) => async (id) => {
+    // Check if user is owner or manager
+    const item = fullDb[key].find(i => i.id === id);
+    if (!item) return;
+
+    const isOwner = item.createdBy === user.id;
+    const isManagerOfCreator = fullDb.users.find(u => u.id === item.createdBy)?.reportsTo === user.id;
+
+    if (!isOwner && !isManagerOfCreator) {
+      alert(`You do not have permission to delete this ${key.slice(0, -1)}. Only the owner or their manager can delete it.`);
+      return;
+    }
+
     try {
       await api.deleteItem(key, id);
       setFullDb((prev) => ({ ...prev, [key]: prev[key].filter((item) => item.id !== id) }));
@@ -144,12 +156,34 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     return entries.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
   }, [fullDb.timeEntries, fullDb.projects, user.id, dateFilter, projectFilter, companyFilter, stakeholderFilter, activityFilter, priorityFilter, searchQuery]);
 
-  const userCompanies = useMemo(() => fullDb.companies.filter((i) => i.createdBy === user.id), [fullDb.companies, user.id]);
-  const userStakeholders = useMemo(() => fullDb.stakeholders.filter((i) => i.createdBy === user.id), [fullDb.stakeholders, user.id]);
-  const userProjects = useMemo(() => fullDb.projects.filter((i) => i.createdBy === user.id), [fullDb.projects, user.id]);
-  const userSubProjects = useMemo(() => fullDb.subProjects.filter((i) => i.createdBy === user.id), [fullDb.subProjects, user.id]);
-  const userActivityTypes = useMemo(() => fullDb.activityTypes, [fullDb.activityTypes]);
-  const userTeamMembers = useMemo(() => fullDb.teamMembers.filter((i) => i.createdBy === user.id), [fullDb.teamMembers, user.id]);
+  const teamUserIds = useMemo(() => {
+    // Current user's manager ID (the head of the team)
+    const managerId = user.reportsTo || user.id;
+    // Everyone reporting to that same manager
+    const siblings = fullDb.users.filter(u => u.reportsTo === managerId || u.id === managerId);
+    // Plus anyone who reports DIRECTLY to the current user (if current user is a manager)
+    const directReports = fullDb.users.filter(u => u.reportsTo === user.id);
+    
+    const ids = new Set([user.id, managerId, ...siblings.map(u => u.id), ...directReports.map(u => u.id)]);
+    return Array.from(ids);
+  }, [fullDb.users, user.id, user.reportsTo]);
+
+  const userCompanies = useMemo(() => fullDb.companies.filter((i) => teamUserIds.includes(i.createdBy)), [fullDb.companies, teamUserIds]);
+  const userStakeholders = useMemo(() => fullDb.stakeholders.filter((i) => teamUserIds.includes(i.createdBy)), [fullDb.stakeholders, teamUserIds]);
+  const userProjects = useMemo(() => fullDb.projects.filter((i) => teamUserIds.includes(i.createdBy)), [fullDb.projects, teamUserIds]);
+  const userSubProjects = useMemo(() => fullDb.subProjects.filter((i) => teamUserIds.includes(i.createdBy)), [fullDb.subProjects, teamUserIds]);
+  const userActivityTypes = useMemo(() => fullDb.activityTypes || [], [fullDb.activityTypes]);
+
+  const userTeamMembers = useMemo(() => {
+    // 1. Custom team members created by anyone in the group
+    const customTeammates = fullDb.teamMembers.filter((i) => teamUserIds.includes(i.createdBy));
+    // 2. Real users in the same team group (excluding self)
+    const realUsersAsTeammates = fullDb.users
+      .filter(u => teamUserIds.includes(u.id) && u.id !== user.id)
+      .map(u => ({ id: u.id, name: u.name, isRealUser: true }));
+    
+    return [...customTeammates, ...realUsersAsTeammates];
+  }, [fullDb.teamMembers, fullDb.users, teamUserIds, user.id]);
 
   const handleAiFill = async ({ projectName, companyName, stakeholderName, subProjects, purpose, yourRole }) => {
     // 1. Create or reuse company

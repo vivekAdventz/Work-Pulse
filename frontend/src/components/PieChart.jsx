@@ -1,8 +1,20 @@
-﻿export default function PieChart({ data, onSliceClick, activeId }) {
+export default function PieChart({ data, onSliceClick, activeId }) {
   const colors = ['#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd', '#e0f2fe'];
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
-  if (total === 0) return <div className="flex items-center justify-center h-full text-slate-500">No data to display</div>;
+  if (total === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 opacity-60">
+        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border-2 border-dashed border-slate-200">
+          <svg className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+          </svg>
+        </div>
+        <p className="text-sm font-medium text-slate-400">No data for this duration</p>
+      </div>
+    );
+  }
 
   if (data.length === 1) {
     const segment = data[0];

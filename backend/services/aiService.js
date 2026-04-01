@@ -133,3 +133,60 @@ ${userPrompt}`;
     throw Object.assign(new Error('AI returned invalid JSON. Please try again with a clearer description.'), { statusCode: 500 });
   }
 }
+
+export async function fillEntryByAI(userPrompt, projects, subProjects, activityTypes) {
+  if (!ai) {
+    throw Object.assign(new Error('Gemini API is not configured on the server.'), { statusCode: 500 });
+  }
+
+  if (!userPrompt || userPrompt.trim().length === 0) {
+    throw Object.assign(new Error('No prompt provided.'), { statusCode: 400 });
+  }
+
+  const projectList = (projects || []).map((p) => `- id: "${p.id}", name: "${p.name}"`).join('\n') || 'none';
+  const subProjectList = (subProjects || []).map((sp) => `- id: "${sp.id}", name: "${sp.name}", projectId: "${sp.projectId}"`).join('\n') || 'none';
+  const activityTypeList = (activityTypes || []).map((a) => `- id: "${a.id}", name: "${a.name}"`).join('\n') || 'none';
+
+  const systemPrompt = `You are a timesheet assistant. Based on the user's task description, return ONLY a valid JSON object (no markdown, no extra text) with exactly this structure:
+
+{
+  "projectId": "<best matching project id from the list, or null if none match>",
+  "subProjectId": "<best matching sub-project id from the list that belongs to the chosen project, or null>",
+  "activityTypeId": "<best matching activity type id from the list, or null>",
+  "description": "<professional bullet-point description of the work done, using markdown bullet points (- item)>"
+}
+
+Available projects:
+${projectList}
+
+Available sub-projects:
+${subProjectList}
+
+Available activity types:
+${activityTypeList}
+
+Rules:
+- Match projectId, subProjectId, and activityTypeId by comparing the user's description to the names semantically. Choose the closest match.
+- If no reasonable match exists, set the field to null.
+- description must use markdown bullet points (lines starting with "- "). Write 3-6 concise professional bullets describing what was done.
+- Return ONLY the raw JSON object. No markdown fences. No explanation.
+
+User task description:
+${userPrompt}`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: systemPrompt,
+  });
+
+  const raw = response.text.trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '');
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw Object.assign(new Error('AI returned invalid JSON. Please try again.'), { statusCode: 500 });
+  }
+}
