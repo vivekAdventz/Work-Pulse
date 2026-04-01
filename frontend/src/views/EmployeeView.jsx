@@ -9,7 +9,8 @@ import ReportModal from '../components/ReportModal';
 import ConfigManager from '../components/ConfigManager';
 import SubProjectConfig from '../components/SubProjectConfig';
 import ProjectConfig from '../components/ProjectConfig';
-import { PlusIcon, PlayIcon, GridIcon, TableIcon } from '../components/Icons';
+import AiFillModal from '../components/AiFillModal';
+import { PlusIcon, PlayIcon, GridIcon, TableIcon, AiWandIcon } from '../components/Icons';
 
 export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -28,6 +29,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isAiFillOpen, setIsAiFillOpen] = useState(false);
 
   const getCurrentTime = () => new Date().toTimeString().slice(0, 8);
 
@@ -148,6 +150,45 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   const userSubProjects = useMemo(() => fullDb.subProjects.filter((i) => i.createdBy === user.id), [fullDb.subProjects, user.id]);
   const userActivityTypes = useMemo(() => fullDb.activityTypes, [fullDb.activityTypes]);
   const userTeamMembers = useMemo(() => fullDb.teamMembers.filter((i) => i.createdBy === user.id), [fullDb.teamMembers, user.id]);
+
+  const handleAiFill = async ({ projectName, companyName, stakeholderName, subProjects, purpose, yourRole }) => {
+    // 1. Create or reuse company
+    let company = userCompanies.find((c) => c.name.toLowerCase() === companyName.toLowerCase());
+    if (!company) {
+      company = await api.addItem('companies', { name: companyName, createdBy: user.id });
+      setFullDb((prev) => ({ ...prev, companies: [...prev.companies, company] }));
+    }
+
+    // 2. Create or reuse stakeholder
+    let stakeholder = userStakeholders.find((s) => s.name.toLowerCase() === stakeholderName.toLowerCase());
+    if (!stakeholder) {
+      stakeholder = await api.addItem('stakeholders', { name: stakeholderName, createdBy: user.id });
+      setFullDb((prev) => ({ ...prev, stakeholders: [...prev.stakeholders, stakeholder] }));
+    }
+
+    // 3. Create project
+    const newProject = await api.addItem('projects', {
+      name: projectName,
+      companyId: company.id || company._id,
+      stakeholderId: stakeholder.id || stakeholder._id,
+      purpose,
+      yourRole,
+      createdBy: user.id,
+    });
+    setFullDb((prev) => ({ ...prev, projects: [...prev.projects, newProject] }));
+
+    // 4. Create sub-projects sequentially
+    const projectId = newProject.id || newProject._id;
+    const createdSubProjects = [];
+    for (const spName of subProjects) {
+      const sp = await api.addItem('subProjects', { name: spName, projectId, createdBy: user.id });
+      createdSubProjects.push(sp);
+    }
+    if (createdSubProjects.length > 0) {
+      setFullDb((prev) => ({ ...prev, subProjects: [...prev.subProjects, ...createdSubProjects] }));
+    }
+  };
+
 
   const clearFilters = () => {
     setDateFilter('');
@@ -303,16 +344,30 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
-          <div className="xl:col-span-3">
-            <ProjectConfig projects={userProjects} companies={userCompanies} stakeholders={userStakeholders} onAdd={handleAddProject} onDelete={handleDeleteItem('projects')} />
+        <div className="space-y-8">
+          {/* Config header with Fill by AI button */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-semibold text-slate-700">Configuration</h2>
+            <button
+              onClick={() => setIsAiFillOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-xl shadow-md hover:shadow-lg hover:opacity-90 transition-all"
+              style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}
+            >
+              <AiWandIcon />
+              Fill by AI
+            </button>
           </div>
-          <div className="xl:col-span-3">
-            <SubProjectConfig projects={userProjects} subProjects={userSubProjects} onAdd={handleAddSubProject} onDelete={handleDeleteItem('subProjects')} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+            <div className="xl:col-span-3">
+              <ProjectConfig projects={userProjects} companies={userCompanies} stakeholders={userStakeholders} onAdd={handleAddProject} onDelete={handleDeleteItem('projects')} />
+            </div>
+            <div className="xl:col-span-3">
+              <SubProjectConfig projects={userProjects} subProjects={userSubProjects} onAdd={handleAddSubProject} onDelete={handleDeleteItem('subProjects')} />
+            </div>
+            <ConfigManager title="Companies" items={userCompanies} onAdd={handleAddItem('companies', user.id)} onDelete={handleDeleteItem('companies')} onUpdate={handleUpdateItem('companies')} />
+            <ConfigManager title="Stakeholders" items={userStakeholders} onAdd={handleAddItem('stakeholders', user.id)} onDelete={handleDeleteItem('stakeholders')} onUpdate={handleUpdateItem('stakeholders')} />
+            <ConfigManager title="Team Members" items={userTeamMembers} onAdd={handleAddItem('teamMembers', user.id)} onDelete={handleDeleteItem('teamMembers')} onUpdate={handleUpdateItem('teamMembers')} />
           </div>
-          <ConfigManager title="Companies" items={userCompanies} onAdd={handleAddItem('companies', user.id)} onDelete={handleDeleteItem('companies')} onUpdate={handleUpdateItem('companies')} />
-          <ConfigManager title="Stakeholders" items={userStakeholders} onAdd={handleAddItem('stakeholders', user.id)} onDelete={handleDeleteItem('stakeholders')} onUpdate={handleUpdateItem('stakeholders')} />
-          <ConfigManager title="Team Members" items={userTeamMembers} onAdd={handleAddItem('teamMembers', user.id)} onDelete={handleDeleteItem('teamMembers')} onUpdate={handleUpdateItem('teamMembers')} />
         </div>
       )}
 
@@ -331,6 +386,16 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
           reportData={reportData}
           isGenerating={isGeneratingReport}
           onClose={() => setIsReportModalOpen(false)}
+        />
+      )}
+      {isAiFillOpen && (
+        <AiFillModal
+          existingProjects={userProjects}
+          companies={userCompanies}
+          stakeholders={userStakeholders}
+          user={user}
+          onClose={() => setIsAiFillOpen(false)}
+          onSave={handleAiFill}
         />
       )}
     </MainLayout>

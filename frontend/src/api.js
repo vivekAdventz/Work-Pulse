@@ -77,6 +77,7 @@ const api = {
   addTimeEntry: (entryData) => api.request('/timeEntries', 'POST', entryData),
   updateTimeEntry: (entryId, entryData) => api.request(`/timeEntries/${entryId}`, 'PUT', entryData),
   deleteTimeEntry: (entryId) => api.request(`/timeEntries/${entryId}`, 'DELETE'),
+  fillByAI: (prompt) => api.request('/fill-by-ai', 'POST', { prompt }),
 };
 
 export default api;

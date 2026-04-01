@@ -85,3 +85,51 @@ ${promptMessage}
   
   return response.text;
 }
+
+export async function generateProjectConfig(userPrompt, existingProjectNames) {
+  if (!ai) {
+    throw Object.assign(new Error('Gemini API is not configured on the server.'), { statusCode: 500 });
+  }
+
+  if (!userPrompt || userPrompt.trim().length === 0) {
+    throw Object.assign(new Error('No prompt provided.'), { statusCode: 400 });
+  }
+
+  const existingNames = (existingProjectNames || []).join(', ') || 'none';
+
+  const systemPrompt = `You are a project configuration assistant. Based on the user's description, extract and return ONLY a valid JSON object (no markdown fences, no explanation) with exactly this structure:
+
+{
+  "projectName": "<unique project name - must NOT match any of these existing names: ${existingNames}>",
+  "companyName": "<company or client name>",
+  "purpose": "<brief purpose or objective of the project, 1-2 sentences>",
+  "yourRole": "<the user's role in this project>",
+  "stakeholderName": "<key stakeholder or sponsor name>",
+  "subProjects": ["<sub-project 1>", "<sub-project 2>", "<sub-project 3>"]
+}
+
+Rules:
+- projectName must be short, clear and unique compared to existing names.
+- subProjects must be an array of 2 to 5 logical work-streams or phases.
+- If any field cannot be inferred, make a reasonable professional guess.
+- Return ONLY the raw JSON object. No markdown. No extra text.
+
+User description:
+${userPrompt}`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: systemPrompt,
+  });
+
+  const raw = response.text.trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '');
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw Object.assign(new Error('AI returned invalid JSON. Please try again with a clearer description.'), { statusCode: 500 });
+  }
+}

@@ -1,4 +1,5 @@
-import { generateSummary as aiGenerateSummary, generateDescription as aiGenerateDescription } from '../services/aiService.js';
+import { generateSummary as aiGenerateSummary, generateDescription as aiGenerateDescription, generateProjectConfig as aiGenerateProjectConfig } from '../services/aiService.js';
+import Project from '../models/Project.js';
 
 export const generateSummary = async (req, res) => {
   const { timeEntries, fullDb } = req.body;
@@ -13,6 +14,21 @@ export const generateDescription = async (req, res) => {
   }
   const description = await aiGenerateDescription(prompt);
   res.json({ description });
+};
+
+export const fillByAI = async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+
+  // Fetch existing project names created by this user to enforce uniqueness
+  const userId = req.user?.userId;
+  const existingProjects = await Project.find({ createdBy: userId }).lean();
+  const existingProjectNames = existingProjects.map((p) => p.name);
+
+  const config = await aiGenerateProjectConfig(prompt, existingProjectNames);
+  res.json(config);
 };
 
 export const downloadCsv = (req, res) => {
