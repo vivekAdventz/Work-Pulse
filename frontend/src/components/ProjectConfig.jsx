@@ -46,11 +46,17 @@ export default function ProjectConfig({ projects, companies, stakeholders, onAdd
               <div className="flex flex-col gap-0.5 mt-1">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Companies:</p>
                 <p className="text-xs text-slate-600">
-                  {companies.filter(c => (item.companyIds || []).includes(c.id)).map(c => c.name).join(', ') || 'N/A'}
+                  {companies.filter(c => {
+                    const ids = item.companyIds || (item.companyId ? [item.companyId] : []);
+                    return ids.includes(c.id);
+                  }).map(c => c.name).join(', ') || 'N/A'}
                 </p>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Stakeholders:</p>
                 <p className="text-xs text-slate-600">
-                  {stakeholders.filter(s => (item.stakeholderIds || []).includes(s.id)).map(s => s.name).join(', ') || 'N/A'}
+                  {stakeholders.filter(s => {
+                    const ids = item.stakeholderIds || (item.stakeholderId ? [item.stakeholderId] : []);
+                    return ids.includes(s.id);
+                  }).map(s => s.name).join(', ') || 'N/A'}
                 </p>
               </div>
             </div>

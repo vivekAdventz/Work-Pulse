@@ -66,7 +66,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     return Array.from(new Set([userId, managerId, ...siblings.map(u => u.id), ...directReports.map(u => u.id)]));
   }, [fullDb.users, userId, currentUser]);
 
-  const userProjects = useMemo(() => fullDb.projects.filter((p) => p.createdBy === userId), [fullDb.projects, userId]);
+  const userProjects = useMemo(() => fullDb.projects.filter((p) => teamUserIds.includes(p.createdBy)), [fullDb.projects, teamUserIds]);
   const userActivityTypes = useMemo(() => fullDb.activityTypes, [fullDb.activityTypes]);
   const userTeamMembers = useMemo(() => {
     const customTeammates = fullDb.teamMembers.filter((i) => teamUserIds.includes(i.createdBy));
@@ -76,19 +76,21 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     return [...customTeammates, ...realUsersAsTeammates];
   }, [fullDb.teamMembers, fullDb.users, teamUserIds, userId]);
   const availableSubProjects = useMemo(
-    () => fullDb.subProjects.filter((sp) => sp.projectId === projectId && sp.createdBy === userId),
-    [fullDb.subProjects, projectId, userId]
+    () => fullDb.subProjects.filter((sp) => sp.projectId === projectId && teamUserIds.includes(sp.createdBy)),
+    [fullDb.subProjects, projectId, teamUserIds]
   );
 
   const selectedProject = userProjects.find((p) => p.id === projectId);
   const companies = useMemo(() => {
-    if (!selectedProject?.companyIds) return [];
-    return fullDb.companies.filter(c => selectedProject.companyIds.includes(c.id));
+    if (!selectedProject) return [];
+    const ids = selectedProject.companyIds || (selectedProject.companyId ? [selectedProject.companyId] : []);
+    return fullDb.companies.filter(c => ids.includes(c.id));
   }, [selectedProject, fullDb.companies]);
 
   const stakeholders = useMemo(() => {
-    if (!selectedProject?.stakeholderIds) return [];
-    return fullDb.stakeholders.filter(s => selectedProject.stakeholderIds.includes(s.id));
+    if (!selectedProject) return [];
+    const ids = selectedProject.stakeholderIds || (selectedProject.stakeholderId ? [selectedProject.stakeholderId] : []);
+    return fullDb.stakeholders.filter(s => ids.includes(s.id));
   }, [selectedProject, fullDb.stakeholders]);
 
   // Derived char state
