@@ -103,7 +103,6 @@ export async function generateProjectConfig(userPrompt, existingProjectNames) {
   "projectName": "<unique project name - must NOT match any of these existing names: ${existingNames}>",
   "companyNames": ["<company 1>", "<company 2>"],
   "purpose": "<brief purpose or objective of the project, 1-2 sentences>",
-  "yourRole": "<the user's role in this project>",
   "stakeholderNames": ["<stakeholder 1>", "<stakeholder 2>"],
   "subProjects": ["<sub-project 1>", "<sub-project 2>", "<sub-project 3>"]
 }

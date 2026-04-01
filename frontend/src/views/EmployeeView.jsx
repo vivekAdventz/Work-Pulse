@@ -185,7 +185,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     return [...customTeammates, ...realUsersAsTeammates];
   }, [fullDb.teamMembers, fullDb.users, teamUserIds, user.id]);
 
-  const handleAiFill = async ({ projectName, companyNames, stakeholderNames, subProjects, purpose, yourRole }) => {
+  const handleAiFill = async ({ projectName, companyNames, stakeholderNames, subProjects, purpose }) => {
     // 1. Create or reuse companies
     const companyIds = [];
     for (const name of companyNames) {
@@ -214,7 +214,6 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
       companyIds,
       stakeholderIds,
       purpose,
-      yourRole,
       createdBy: user.id,
     });
     setFullDb((prev) => ({ ...prev, projects: [...prev.projects, newProject] }));

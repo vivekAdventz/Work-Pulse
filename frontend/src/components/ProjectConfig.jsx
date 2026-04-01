@@ -58,6 +58,12 @@ export default function ProjectConfig({ projects, companies, stakeholders, onAdd
                     return ids.includes(s.id);
                   }).map(s => s.name).join(', ') || 'N/A'}
                 </p>
+                {item.purpose && (
+                  <>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Purpose:</p>
+                    <p className="text-xs text-slate-600">{item.purpose}</p>
+                  </>
+                )}
               </div>
             </div>
             <div className="opacity-0 group-hover:opacity-100 transition-opacity">

@@ -15,7 +15,6 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
   const [companyNames, setCompanyNames] = useState([]);
   const [newCompanyName, setNewCompanyName] = useState('');
   const [purpose, setPurpose] = useState('');
-  const [yourRole, setYourRole] = useState('');
   const [stakeholderNames, setStakeholderNames] = useState([]);
   const [newStakeholderName, setNewStakeholderName] = useState('');
   const [subProjects, setSubProjects] = useState([]);
@@ -37,7 +36,6 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
       setProjectName(config.projectName || '');
       setCompanyNames(Array.isArray(config.companyNames) ? config.companyNames : config.companyName ? [config.companyName] : []);
       setPurpose(config.purpose || '');
-      setYourRole(config.yourRole || '');
       setStakeholderNames(Array.isArray(config.stakeholderNames) ? config.stakeholderNames : config.stakeholderName ? [config.stakeholderName] : []);
       setSubProjects(Array.isArray(config.subProjects) ? config.subProjects : []);
       setStep(STEPS.REVIEW);
@@ -86,7 +84,6 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
         projectName: projectName.trim(),
         companyNames,
         purpose: purpose.trim(),
-        yourRole: yourRole.trim(),
         stakeholderNames,
         subProjects,
       });
@@ -224,20 +221,6 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
                     />
                     <button onClick={() => addChip(setCompanyNames, newCompanyName, setNewCompanyName)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"><PlusIcon /></button>
                   </div>
-                </div>
-
-                {/* Your Role */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                    Your Role
-                  </label>
-                  <input
-                    type="text"
-                    value={yourRole}
-                    onChange={(e) => setYourRole(e.target.value)}
-                    className="w-full p-2.5 border-2 border-slate-200 focus:border-violet-400 rounded-lg text-sm text-slate-800 outline-none transition-colors"
-                    placeholder="e.g. Lead Developer"
-                  />
                 </div>
 
                 {/* Stakeholder Names */}
