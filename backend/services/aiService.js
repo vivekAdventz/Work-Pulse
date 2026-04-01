@@ -101,15 +101,16 @@ export async function generateProjectConfig(userPrompt, existingProjectNames) {
 
 {
   "projectName": "<unique project name - must NOT match any of these existing names: ${existingNames}>",
-  "companyName": "<company or client name>",
+  "companyNames": ["<company 1>", "<company 2>"],
   "purpose": "<brief purpose or objective of the project, 1-2 sentences>",
   "yourRole": "<the user's role in this project>",
-  "stakeholderName": "<key stakeholder or sponsor name>",
+  "stakeholderNames": ["<stakeholder 1>", "<stakeholder 2>"],
   "subProjects": ["<sub-project 1>", "<sub-project 2>", "<sub-project 3>"]
 }
 
 Rules:
 - projectName must be short, clear and unique compared to existing names.
+- companyNames and stakeholderNames must be arrays. Extract all relevant entities.
 - subProjects must be an array of 2 to 5 logical work-streams or phases.
 - If any field cannot be inferred, make a reasonable professional guess.
 - Return ONLY the raw JSON object. No markdown. No extra text.
@@ -134,7 +135,7 @@ ${userPrompt}`;
   }
 }
 
-export async function fillEntryByAI(userPrompt, projects, subProjects, activityTypes) {
+export async function fillEntryByAI(userPrompt, projects, subProjects, activityTypes, teamMembers) {
   if (!ai) {
     throw Object.assign(new Error('Gemini API is not configured on the server.'), { statusCode: 500 });
   }
@@ -146,6 +147,7 @@ export async function fillEntryByAI(userPrompt, projects, subProjects, activityT
   const projectList = (projects || []).map((p) => `- id: "${p.id}", name: "${p.name}"`).join('\n') || 'none';
   const subProjectList = (subProjects || []).map((sp) => `- id: "${sp.id}", name: "${sp.name}", projectId: "${sp.projectId}"`).join('\n') || 'none';
   const activityTypeList = (activityTypes || []).map((a) => `- id: "${a.id}", name: "${a.name}"`).join('\n') || 'none';
+  const teamMemberList = (teamMembers || []).map((tm) => `- id: "${tm.id}", name: "${tm.name}"`).join('\n') || 'none';
 
   const systemPrompt = `You are a timesheet assistant. Based on the user's task description, return ONLY a valid JSON object (no markdown, no extra text) with exactly this structure:
 
@@ -153,6 +155,7 @@ export async function fillEntryByAI(userPrompt, projects, subProjects, activityT
   "projectId": "<best matching project id from the list, or null if none match>",
   "subProjectId": "<best matching sub-project id from the list that belongs to the chosen project, or null>",
   "activityTypeId": "<best matching activity type id from the list, or null>",
+  "teamMemberIds": ["<id of team member 1>", "<id of team member 2>"],
   "description": "<professional bullet-point description of the work done, using markdown bullet points (- item)>"
 }
 
@@ -165,9 +168,13 @@ ${subProjectList}
 Available activity types:
 ${activityTypeList}
 
+Available team members:
+${teamMemberList}
+
 Rules:
-- Match projectId, subProjectId, and activityTypeId by comparing the user's description to the names semantically. Choose the closest match.
-- If no reasonable match exists, set the field to null.
+- Match projectId, subProjectId, activityTypeId, and teamMemberIds by comparing the user's description to the names semantically. Choose the closest matches.
+- teamMemberIds should be an array of project member IDs who were mentioned or likely involved. If none, return empty array [].
+- If no reasonable match exists for IDs, set the field to null (or [] for teamMemberIds).
 - description must use markdown bullet points (lines starting with "- "). Write 3-6 concise professional bullets describing what was done.
 - Return ONLY the raw JSON object. No markdown fences. No explanation.
 

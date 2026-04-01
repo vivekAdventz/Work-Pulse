@@ -4,6 +4,8 @@ import Project from '../models/Project.js';
 import SubProject from '../models/SubProject.js';
 import ActivityType from '../models/ActivityType.js';
 
+import TeamMember from '../models/TeamMember.js';
+
 export const generateSummary = async (req, res) => {
   const { timeEntries, fullDb } = req.body;
   const summary = await aiGenerateSummary(timeEntries, fullDb);
@@ -71,7 +73,16 @@ export const fillEntryByAI = async (req, res) => {
     list.map(a => ({ id: a._id.toString(), name: a.name }))
   );
 
-  const result = await aiFillEntryByAI(prompt, projects, subProjects, activityTypes);
+  // Fetch team members (real users and custom)
+  const realUsers = await User.find({ _id: { $in: teamUserIds }, _id: { $ne: userId } }).lean().then(list =>
+    list.map(u => ({ id: u._id.toString(), name: u.name, isRealUser: true }))
+  );
+  const customMembers = await TeamMember.find({ createdBy: { $in: teamUserIds } }).lean().then(list =>
+    list.map(m => ({ id: m._id.toString(), name: m.name }))
+  );
+  const teamMembers = [...realUsers, ...customMembers];
+
+  const result = await aiFillEntryByAI(prompt, projects, subProjects, activityTypes, teamMembers);
   res.json(result);
 };
 

@@ -117,9 +117,9 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     }
   };
 
-  const handleAddProject = async (name, companyId, stakeholderId) => {
+  const handleAddProject = async (name, companyIds, stakeholderIds) => {
     try {
-      const newProject = await api.addItem('projects', { name, companyId, stakeholderId, createdBy: user.id });
+      const newProject = await api.addItem('projects', { name, companyIds, stakeholderIds, createdBy: user.id });
       setFullDb((prev) => ({ ...prev, projects: [...prev.projects, newProject] }));
     } catch (error) {
       alert(`Failed to add project: ${error.message}`);
@@ -185,26 +185,34 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     return [...customTeammates, ...realUsersAsTeammates];
   }, [fullDb.teamMembers, fullDb.users, teamUserIds, user.id]);
 
-  const handleAiFill = async ({ projectName, companyName, stakeholderName, subProjects, purpose, yourRole }) => {
-    // 1. Create or reuse company
-    let company = userCompanies.find((c) => c.name.toLowerCase() === companyName.toLowerCase());
-    if (!company) {
-      company = await api.addItem('companies', { name: companyName, createdBy: user.id });
-      setFullDb((prev) => ({ ...prev, companies: [...prev.companies, company] }));
+  const handleAiFill = async ({ projectName, companyNames, stakeholderNames, subProjects, purpose, yourRole }) => {
+    // 1. Create or reuse companies
+    const companyIds = [];
+    for (const name of companyNames) {
+      let company = userCompanies.find((c) => c.name.toLowerCase() === name.toLowerCase());
+      if (!company) {
+        company = await api.addItem('companies', { name, createdBy: user.id });
+        setFullDb((prev) => ({ ...prev, companies: [...prev.companies, company] }));
+      }
+      companyIds.push(company.id || company._id);
     }
 
-    // 2. Create or reuse stakeholder
-    let stakeholder = userStakeholders.find((s) => s.name.toLowerCase() === stakeholderName.toLowerCase());
-    if (!stakeholder) {
-      stakeholder = await api.addItem('stakeholders', { name: stakeholderName, createdBy: user.id });
-      setFullDb((prev) => ({ ...prev, stakeholders: [...prev.stakeholders, stakeholder] }));
+    // 2. Create or reuse stakeholders
+    const stakeholderIds = [];
+    for (const name of stakeholderNames) {
+      let stakeholder = userStakeholders.find((s) => s.name.toLowerCase() === name.toLowerCase());
+      if (!stakeholder) {
+        stakeholder = await api.addItem('stakeholders', { name, createdBy: user.id });
+        setFullDb((prev) => ({ ...prev, stakeholders: [...prev.stakeholders, stakeholder] }));
+      }
+      stakeholderIds.push(stakeholder.id || stakeholder._id);
     }
 
     // 3. Create project
     const newProject = await api.addItem('projects', {
       name: projectName,
-      companyId: company.id || company._id,
-      stakeholderId: stakeholder.id || stakeholder._id,
+      companyIds,
+      stakeholderIds,
       purpose,
       yourRole,
       createdBy: user.id,

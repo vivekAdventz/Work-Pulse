@@ -56,17 +56,40 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     return diff > 0 ? diff : 0;
   }, [startTime, endTime]);
 
+  const currentUser = useMemo(() => fullDb.users.find(u => u.id === userId), [fullDb.users, userId]);
+
+  const teamUserIds = useMemo(() => {
+    if (!currentUser) return [userId];
+    const managerId = currentUser.reportsTo || userId;
+    const siblings = fullDb.users.filter(u => u.reportsTo === managerId || u.id === managerId);
+    const directReports = fullDb.users.filter(u => u.reportsTo === userId);
+    return Array.from(new Set([userId, managerId, ...siblings.map(u => u.id), ...directReports.map(u => u.id)]));
+  }, [fullDb.users, userId, currentUser]);
+
   const userProjects = useMemo(() => fullDb.projects.filter((p) => p.createdBy === userId), [fullDb.projects, userId]);
   const userActivityTypes = useMemo(() => fullDb.activityTypes, [fullDb.activityTypes]);
-  const userTeamMembers = useMemo(() => fullDb.teamMembers.filter((t) => t.createdBy === userId), [fullDb.teamMembers, userId]);
+  const userTeamMembers = useMemo(() => {
+    const customTeammates = fullDb.teamMembers.filter((i) => teamUserIds.includes(i.createdBy));
+    const realUsersAsTeammates = fullDb.users
+      .filter(u => teamUserIds.includes(u.id) && u.id !== userId)
+      .map(u => ({ id: u.id, name: u.name, isRealUser: true }));
+    return [...customTeammates, ...realUsersAsTeammates];
+  }, [fullDb.teamMembers, fullDb.users, teamUserIds, userId]);
   const availableSubProjects = useMemo(
     () => fullDb.subProjects.filter((sp) => sp.projectId === projectId && sp.createdBy === userId),
     [fullDb.subProjects, projectId, userId]
   );
 
   const selectedProject = userProjects.find((p) => p.id === projectId);
-  const company = fullDb.companies.find((c) => c.id === selectedProject?.companyId);
-  const stakeholder = fullDb.stakeholders.find((s) => s.id === selectedProject?.stakeholderId);
+  const companies = useMemo(() => {
+    if (!selectedProject?.companyIds) return [];
+    return fullDb.companies.filter(c => selectedProject.companyIds.includes(c.id));
+  }, [selectedProject, fullDb.companies]);
+
+  const stakeholders = useMemo(() => {
+    if (!selectedProject?.stakeholderIds) return [];
+    return fullDb.stakeholders.filter(s => selectedProject.stakeholderIds.includes(s.id));
+  }, [selectedProject, fullDb.stakeholders]);
 
   // Derived char state
   const charCount = aiPrompt.length;
@@ -116,6 +139,15 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       // Fill description
       if (result.description) {
         setDescription(result.description);
+      }
+
+      // Auto-select team members
+      if (Array.isArray(result.teamMemberIds)) {
+        // Filter out IDs that are not in our current team list
+        const validIds = result.teamMemberIds.filter(id => 
+          userTeamMembers.some(tm => tm.id === id)
+        );
+        setTeamMemberIds(validIds);
       }
 
       setAiSuccess(true);
@@ -332,14 +364,14 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
 
               {/* Company (auto) */}
               <div>
-                <label className={labelClasses}>Company <span className="text-xs text-slate-400">(auto)</span></label>
-                <input type="text" value={company?.name || ''} readOnly className={readOnlyInputClasses} />
+                <label className={labelClasses}>Companies <span className="text-xs text-slate-400">(auto)</span></label>
+                <input type="text" value={companies.map(c => c.name).join(', ') || ''} readOnly className={readOnlyInputClasses} />
               </div>
 
               {/* Stakeholder (auto) */}
               <div>
-                <label className={labelClasses}>Stakeholder <span className="text-xs text-slate-400">(auto)</span></label>
-                <input type="text" value={stakeholder?.name || ''} readOnly className={readOnlyInputClasses} />
+                <label className={labelClasses}>Stakeholders <span className="text-xs text-slate-400">(auto)</span></label>
+                <input type="text" value={stakeholders.map(s => s.name).join(', ') || ''} readOnly className={readOnlyInputClasses} />
               </div>
 
               {/* Activity Type */}

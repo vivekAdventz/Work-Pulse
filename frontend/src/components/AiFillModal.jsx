@@ -12,10 +12,12 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
 
   // Editable review fields
   const [projectName, setProjectName] = useState('');
-  const [companyName, setCompanyName] = useState('');
+  const [companyNames, setCompanyNames] = useState([]);
+  const [newCompanyName, setNewCompanyName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [yourRole, setYourRole] = useState('');
-  const [stakeholderName, setStakeholderName] = useState('');
+  const [stakeholderNames, setStakeholderNames] = useState([]);
+  const [newStakeholderName, setNewStakeholderName] = useState('');
   const [subProjects, setSubProjects] = useState([]);
   const [newSubProject, setNewSubProject] = useState('');
 
@@ -33,10 +35,10 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
         config.projectName = config.projectName + ' (2)';
       }
       setProjectName(config.projectName || '');
-      setCompanyName(config.companyName || '');
+      setCompanyNames(Array.isArray(config.companyNames) ? config.companyNames : config.companyName ? [config.companyName] : []);
       setPurpose(config.purpose || '');
       setYourRole(config.yourRole || '');
-      setStakeholderName(config.stakeholderName || '');
+      setStakeholderNames(Array.isArray(config.stakeholderNames) ? config.stakeholderNames : config.stakeholderName ? [config.stakeholderName] : []);
       setSubProjects(Array.isArray(config.subProjects) ? config.subProjects : []);
       setStep(STEPS.REVIEW);
     } catch (err) {
@@ -46,20 +48,28 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
     }
   };
 
-  const addSubProject = () => {
-    if (newSubProject.trim()) {
-      setSubProjects((prev) => [...prev, newSubProject.trim()]);
-      setNewSubProject('');
+  const addChip = (setter, value, valueSetter) => {
+    if (value.trim()) {
+      setter((prev) => [...new Set([...prev, value.trim()])]);
+      valueSetter('');
     }
   };
 
-  const removeSubProject = (idx) => {
-    setSubProjects((prev) => prev.filter((_, i) => i !== idx));
+  const removeChip = (setter, idx) => {
+    setter((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleSave = async () => {
     if (!projectName.trim()) {
       setError('Project name is required.');
+      return;
+    }
+    if (companyNames.length === 0) {
+      setError('At least one company is required.');
+      return;
+    }
+    if (stakeholderNames.length === 0) {
+      setError('At least one stakeholder is required.');
       return;
     }
     const isDuplicate = existingProjects.some(
@@ -74,10 +84,10 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
     try {
       await onSave({
         projectName: projectName.trim(),
-        companyName: companyName.trim(),
+        companyNames,
         purpose: purpose.trim(),
         yourRole: yourRole.trim(),
-        stakeholderName: stakeholderName.trim(),
+        stakeholderNames,
         subProjects,
       });
       onClose();
@@ -190,18 +200,30 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
                   />
                 </div>
 
-                {/* Company Name */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                    Company Name
+                {/* Company Names */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    Companies
                   </label>
-                  <input
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="w-full p-2.5 border-2 border-slate-200 focus:border-violet-400 rounded-lg text-sm text-slate-800 outline-none transition-colors"
-                    placeholder="Company / client name"
-                  />
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {companyNames.map((c, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium rounded-full">
+                        {c}
+                        <button onClick={() => removeChip(setCompanyNames, idx)} className="text-blue-400 hover:text-red-500 transition-colors leading-none">×</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newCompanyName}
+                      onChange={(e) => setNewCompanyName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChip(setCompanyNames, newCompanyName, setNewCompanyName); } }}
+                      className="flex-1 p-2 border-2 border-slate-200 focus:border-violet-400 rounded-lg text-sm outline-none transition-colors"
+                      placeholder="Add a company…"
+                    />
+                    <button onClick={() => addChip(setCompanyNames, newCompanyName, setNewCompanyName)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"><PlusIcon /></button>
+                  </div>
                 </div>
 
                 {/* Your Role */}
@@ -218,18 +240,30 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
                   />
                 </div>
 
-                {/* Stakeholder Name */}
+                {/* Stakeholder Names */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                    Stakeholder Name
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    Stakeholders
                   </label>
-                  <input
-                    type="text"
-                    value={stakeholderName}
-                    onChange={(e) => setStakeholderName(e.target.value)}
-                    className="w-full p-2.5 border-2 border-slate-200 focus:border-violet-400 rounded-lg text-sm text-slate-800 outline-none transition-colors"
-                    placeholder="Key stakeholder / sponsor"
-                  />
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {stakeholderNames.map((s, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium rounded-full">
+                        {s}
+                        <button onClick={() => removeChip(setStakeholderNames, idx)} className="text-emerald-400 hover:text-red-500 transition-colors leading-none">×</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newStakeholderName}
+                      onChange={(e) => setNewStakeholderName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChip(setStakeholderNames, newStakeholderName, setNewStakeholderName); } }}
+                      className="flex-1 p-2 border-2 border-slate-200 focus:border-violet-400 rounded-lg text-sm outline-none transition-colors"
+                      placeholder="Add a stakeholder…"
+                    />
+                    <button onClick={() => addChip(setStakeholderNames, newStakeholderName, setNewStakeholderName)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"><PlusIcon /></button>
+                  </div>
                 </div>
               </div>
 
@@ -260,7 +294,7 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
                     >
                       {sp}
                       <button
-                        onClick={() => removeSubProject(idx)}
+                        onClick={() => removeChip(setSubProjects, idx)}
                         className="text-violet-400 hover:text-red-500 transition-colors leading-none"
                       >
                         ×
@@ -276,12 +310,12 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
                     type="text"
                     value={newSubProject}
                     onChange={(e) => setNewSubProject(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSubProject(); } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChip(setSubProjects, newSubProject, setNewSubProject); } }}
                     className="flex-1 p-2.5 border-2 border-slate-200 focus:border-violet-400 rounded-lg text-sm outline-none transition-colors"
                     placeholder="Add a sub-project…"
                   />
                   <button
-                    onClick={addSubProject}
+                    onClick={() => addChip(setSubProjects, newSubProject, setNewSubProject)}
                     className="px-3 py-2.5 bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-lg transition-colors"
                   >
                     <PlusIcon />
