@@ -13,10 +13,8 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
   // Editable review fields
   const [projectName, setProjectName] = useState('');
   const [companyNames, setCompanyNames] = useState([]);
-  const [newCompanyName, setNewCompanyName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [stakeholderNames, setStakeholderNames] = useState([]);
-  const [newStakeholderName, setNewStakeholderName] = useState('');
   const [subProjects, setSubProjects] = useState([]);
   const [newSubProject, setNewSubProject] = useState('');
 
@@ -26,17 +24,10 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
     setError('');
     try {
       const config = await api.fillByAI(prompt);
-      // Validate uniqueness
-      const isDuplicate = existingProjects.some(
-        (p) => p.name.toLowerCase() === config.projectName?.toLowerCase()
-      );
-      if (isDuplicate) {
-        config.projectName = config.projectName + ' (2)';
-      }
       setProjectName(config.projectName || '');
-      setCompanyNames(Array.isArray(config.companyNames) ? config.companyNames : config.companyName ? [config.companyName] : []);
+      setCompanyNames([]);
       setPurpose(config.purpose || '');
-      setStakeholderNames(Array.isArray(config.stakeholderNames) ? config.stakeholderNames : config.stakeholderName ? [config.stakeholderName] : []);
+      setStakeholderNames([]);
       setSubProjects(Array.isArray(config.subProjects) ? config.subProjects : []);
       setStep(STEPS.REVIEW);
     } catch (err) {
@@ -111,8 +102,8 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
               {step === STEPS.PROMPT
                 ? 'Describe your project and let AI configure it'
                 : step === STEPS.REVIEW
-                ? 'Review and edit the AI-generated configuration'
-                : 'Saving your project configuration…'}
+                  ? 'Review and edit the AI-generated configuration'
+                  : 'Saving your project configuration…'}
             </p>
           </div>
           <button
@@ -141,6 +132,7 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
                   className="w-full p-4 border-2 border-slate-200 focus:border-violet-400 rounded-xl text-sm text-slate-700 placeholder-slate-400 resize-none outline-none transition-colors"
                 />
                 <p className="mt-1 text-xs text-slate-400">Tip: Press Ctrl+Enter to generate</p>
+                <p className="mt-2 text-sm text-sky-600 font-medium">For best results, please mention your project name and your role in this project.</p>
               </div>
 
               {error && (
@@ -200,7 +192,7 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
                 {/* Company Names */}
                 <div className="md:col-span-2">
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                    Companies
+                    Companies <span className="text-red-400">*</span>
                   </label>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {companyNames.map((c, idx) => (
@@ -209,18 +201,21 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
                         <button onClick={() => removeChip(setCompanyNames, idx)} className="text-blue-400 hover:text-red-500 transition-colors leading-none">×</button>
                       </span>
                     ))}
+                    {companyNames.length === 0 && <span className="text-xs text-slate-400 italic">No companies selected</span>}
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newCompanyName}
-                      onChange={(e) => setNewCompanyName(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChip(setCompanyNames, newCompanyName, setNewCompanyName); } }}
-                      className="flex-1 p-2 border-2 border-slate-200 focus:border-violet-400 rounded-lg text-sm outline-none transition-colors"
-                      placeholder="Add a company…"
-                    />
-                    <button onClick={() => addChip(setCompanyNames, newCompanyName, setNewCompanyName)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"><PlusIcon /></button>
-                  </div>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      if (name && !companyNames.includes(name)) setCompanyNames(prev => [...prev, name]);
+                    }}
+                    className="w-full p-2 border-2 border-slate-200 focus:border-violet-400 rounded-lg text-sm text-slate-700 outline-none transition-colors bg-white"
+                  >
+                    <option value="">Select a company…</option>
+                    {companies.filter(c => !companyNames.includes(c.name)).map(c => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Stakeholder Names */}
@@ -235,18 +230,21 @@ export default function AiFillModal({ existingProjects, companies, stakeholders,
                         <button onClick={() => removeChip(setStakeholderNames, idx)} className="text-emerald-400 hover:text-red-500 transition-colors leading-none">×</button>
                       </span>
                     ))}
+                    {stakeholderNames.length === 0 && <span className="text-xs text-slate-400 italic">No stakeholders selected</span>}
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newStakeholderName}
-                      onChange={(e) => setNewStakeholderName(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChip(setStakeholderNames, newStakeholderName, setNewStakeholderName); } }}
-                      className="flex-1 p-2 border-2 border-slate-200 focus:border-violet-400 rounded-lg text-sm outline-none transition-colors"
-                      placeholder="Add a stakeholder…"
-                    />
-                    <button onClick={() => addChip(setStakeholderNames, newStakeholderName, setNewStakeholderName)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"><PlusIcon /></button>
-                  </div>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      if (name && !stakeholderNames.includes(name)) setStakeholderNames(prev => [...prev, name]);
+                    }}
+                    className="w-full p-2 border-2 border-slate-200 focus:border-violet-400 rounded-lg text-sm text-slate-700 outline-none transition-colors bg-white"
+                  >
+                    <option value="">Select a stakeholder…</option>
+                    {stakeholders.filter(s => !stakeholderNames.includes(s.name)).map(s => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

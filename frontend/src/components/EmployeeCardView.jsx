@@ -2,7 +2,7 @@ import { useState } from 'react';
 import TimeEntryList from './TimeEntryList';
 import { FolderIcon, ArrowLeftIcon, EmptyIcon } from './Icons';
 
-export default function EmployeeCardView({ projects, subProjects, timeEntries, allUsers, fullDb, onDeleteEntry, onEditEntry }) {
+export default function EmployeeCardView({ projects, subProjects, timeEntries, allUsers, fullDb, onDeleteEntry, onEditEntry, currentUserId }) {
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [selectedSubProjectId, setSelectedSubProjectId] = useState(null);
 
@@ -27,7 +27,7 @@ export default function EmployeeCardView({ projects, subProjects, timeEntries, a
           <span className="text-slate-800 px-1 truncate max-w-xs" title={activeSubProject?.name || 'Uncategorized'}>{activeSubProject?.name || 'Uncategorized Tasks'}</span>
           <button onClick={() => setSelectedSubProjectId(null)} className="ml-auto flex items-center gap-1 text-sm bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 transition font-semibold"><ArrowLeftIcon /> Back</button>
         </div>
-        <TimeEntryList entries={filteredEntries} allUsers={allUsers} fullDb={fullDb} onDeleteEntry={onDeleteEntry} onEditEntry={onEditEntry} />
+        <TimeEntryList entries={filteredEntries} allUsers={allUsers} fullDb={fullDb} onDeleteEntry={onDeleteEntry} onEditEntry={onEditEntry} currentUserId={currentUserId} />
       </div>
     );
   }

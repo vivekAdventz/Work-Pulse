@@ -10,9 +10,11 @@ import ConfigManager from '../components/ConfigManager';
 import SubProjectConfig from '../components/SubProjectConfig';
 import ProjectConfig from '../components/ProjectConfig';
 import AiFillModal from '../components/AiFillModal';
+import Toast, { useToast } from '../components/Toast';
 import { PlusIcon, PlayIcon, GridIcon, TableIcon, AiWandIcon } from '../components/Icons';
 
 export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
+  const { toasts, showToast, removeToast } = useToast();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [timerStartTime, setTimerStartTime] = useState(null);
@@ -38,15 +40,16 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
       if (entryData.id) {
         const updatedEntry = await api.updateTimeEntry(entryData.id, entryData);
         setFullDb((prev) => ({ ...prev, timeEntries: prev.timeEntries.map((e) => (e.id === entryData.id ? updatedEntry : e)) }));
+        showToast('Time entry updated successfully.', 'success');
       } else {
         const newEntry = await api.addTimeEntry(entryData);
         setFullDb((prev) => ({ ...prev, timeEntries: [...prev.timeEntries, newEntry] }));
+        showToast('Time entry added successfully.', 'success');
       }
-    } catch (error) {
-      alert(`Failed to save time entry: ${error.message}`);
-    } finally {
       setIsFormOpen(false);
       setFormInitialData(null);
+    } catch (error) {
+      showToast(`Failed to save time entry: ${error.message}`, 'error');
     }
   };
 
@@ -55,8 +58,9 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
       try {
         await api.deleteTimeEntry(id);
         setFullDb((prev) => ({ ...prev, timeEntries: prev.timeEntries.filter((e) => e.id !== id) }));
+        showToast('Time entry deleted.', 'info');
       } catch (error) {
-        alert(`Failed to delete entry: ${error.message}`);
+        showToast(`Failed to delete entry: ${error.message}`, 'error');
       }
     }
   };
@@ -82,13 +86,13 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     try {
       const newItem = await api.addItem(key, { name, createdBy });
       setFullDb((prev) => ({ ...prev, [key]: [...prev[key], newItem] }));
+      showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} added successfully.`, 'success');
     } catch (error) {
-      alert(`Failed to add item: ${error.message}`);
+      showToast(`Failed to add item: ${error.message}`, 'error');
     }
   };
 
   const handleDeleteItem = (key) => async (id) => {
-    // Check if user is owner or manager
     const item = fullDb[key].find(i => i.id === id);
     if (!item) return;
 
@@ -96,15 +100,16 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     const isManagerOfCreator = fullDb.users.find(u => u.id === item.createdBy)?.reportsTo === user.id;
 
     if (!isOwner && !isManagerOfCreator) {
-      alert(`You do not have permission to delete this ${key.slice(0, -1)}. Only the owner or their manager can delete it.`);
+      showToast(`You do not have permission to delete this ${key.slice(0, -1)}. Only the owner or their manager can delete it.`, 'warning');
       return;
     }
 
     try {
       await api.deleteItem(key, id);
       setFullDb((prev) => ({ ...prev, [key]: prev[key].filter((item) => item.id !== id) }));
+      showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} deleted.`, 'info');
     } catch (error) {
-      alert(`Failed to delete item: ${error.message}`);
+      showToast(`Failed to delete item: ${error.message}`, 'error');
     }
   };
 
@@ -112,17 +117,29 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     try {
       const updatedItem = await api.updateItem(key, id, { name: newName });
       setFullDb((prev) => ({ ...prev, [key]: prev[key].map((item) => (item.id === id ? updatedItem : item)) }));
+      showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} updated successfully.`, 'success');
     } catch (error) {
-      alert(`Failed to update item: ${error.message}`);
+      showToast(`Failed to update item: ${error.message}`, 'error');
     }
   };
 
-  const handleAddProject = async (name, companyIds, stakeholderIds) => {
+  const handleUpdateProject = async (id, projectData) => {
     try {
-      const newProject = await api.addItem('projects', { name, companyIds, stakeholderIds, createdBy: user.id });
-      setFullDb((prev) => ({ ...prev, projects: [...prev.projects, newProject] }));
+      const updatedProject = await api.updateItem('projects', id, projectData);
+      setFullDb((prev) => ({ ...prev, projects: prev.projects.map((p) => (p.id === id ? updatedProject : p)) }));
+      showToast('Project updated successfully.', 'success');
     } catch (error) {
-      alert(`Failed to add project: ${error.message}`);
+      showToast(`Failed to update project: ${error.message}`, 'error');
+    }
+  };
+
+  const handleAddProject = async (name, companyIds, purpose) => {
+    try {
+      const newProject = await api.addItem('projects', { name, companyIds, purpose, createdBy: user.id });
+      setFullDb((prev) => ({ ...prev, projects: [...prev.projects, newProject] }));
+      showToast('Project added successfully.', 'success');
+    } catch (error) {
+      showToast(`Failed to add project: ${error.message}`, 'error');
     }
   };
 
@@ -130,13 +147,16 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     try {
       const newSubProject = await api.addItem('subProjects', { name, projectId, createdBy: user.id });
       setFullDb((prev) => ({ ...prev, subProjects: [...prev.subProjects, newSubProject] }));
+      showToast('Sub-project added successfully.', 'success');
     } catch (error) {
-      alert(`Failed to add sub-project: ${error.message}`);
+      showToast(`Failed to add sub-project: ${error.message}`, 'error');
     }
   };
 
   const userTimeEntries = useMemo(() => {
-    let entries = fullDb.timeEntries.filter((e) => e.userId === user.id);
+    let entries = fullDb.timeEntries.filter(
+      (e) => e.userId === user.id || (Array.isArray(e.teamMemberIds) && e.teamMemberIds.includes(user.id))
+    );
     if (dateFilter) entries = entries.filter((e) => e.date === dateFilter);
     if (projectFilter) entries = entries.filter((e) => e.projectId === projectFilter);
     if (companyFilter) {
@@ -163,7 +183,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     const siblings = fullDb.users.filter(u => u.reportsTo === managerId || u.id === managerId);
     // Plus anyone who reports DIRECTLY to the current user (if current user is a manager)
     const directReports = fullDb.users.filter(u => u.reportsTo === user.id);
-    
+
     const ids = new Set([user.id, managerId, ...siblings.map(u => u.id), ...directReports.map(u => u.id)]);
     return Array.from(ids);
   }, [fullDb.users, user.id, user.reportsTo]);
@@ -181,11 +201,11 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     const realUsersAsTeammates = fullDb.users
       .filter(u => teamUserIds.includes(u.id) && u.id !== user.id)
       .map(u => ({ id: u.id, name: u.name, isRealUser: true }));
-    
+
     return [...customTeammates, ...realUsersAsTeammates];
   }, [fullDb.teamMembers, fullDb.users, teamUserIds, user.id]);
 
-  const handleAiFill = async ({ projectName, companyNames, stakeholderNames, subProjects, purpose }) => {
+  const handleAiFill = async ({ projectName, companyNames, subProjects, purpose }) => {
     // 1. Create or reuse companies
     const companyIds = [];
     for (const name of companyNames) {
@@ -197,22 +217,10 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
       companyIds.push(company.id || company._id);
     }
 
-    // 2. Create or reuse stakeholders
-    const stakeholderIds = [];
-    for (const name of stakeholderNames) {
-      let stakeholder = userStakeholders.find((s) => s.name.toLowerCase() === name.toLowerCase());
-      if (!stakeholder) {
-        stakeholder = await api.addItem('stakeholders', { name, createdBy: user.id });
-        setFullDb((prev) => ({ ...prev, stakeholders: [...prev.stakeholders, stakeholder] }));
-      }
-      stakeholderIds.push(stakeholder.id || stakeholder._id);
-    }
-
-    // 3. Create project
+    // 2. Create project
     const newProject = await api.addItem('projects', {
       name: projectName,
       companyIds,
-      stakeholderIds,
       purpose,
       createdBy: user.id,
     });
@@ -228,6 +236,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     if (createdSubProjects.length > 0) {
       setFullDb((prev) => ({ ...prev, subProjects: [...prev.subProjects, ...createdSubProjects] }));
     }
+    showToast(`Project "${projectName}" created with ${createdSubProjects.length} sub-projects.`, 'success');
   };
 
 
@@ -245,17 +254,17 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
 
   const handleGenerateReport = async () => {
     if (userTimeEntries.length === 0) {
-      alert('No entries to summarize.');
+      showToast('No entries to summarize.', 'warning');
       return;
     }
     setIsReportModalOpen(true);
     setIsGeneratingReport(true);
     setReportData(null);
     try {
-      const result = await api.generateSummary(userTimeEntries, fullDb);
+      const result = await api.generateSummary(userTimeEntries, fullDb, 'employee');
       setReportData(result.summary);
     } catch (error) {
-      alert(`Failed to generate report: ${error.message}`);
+      showToast(`Failed to generate report: ${error.message}`, 'error');
       setIsReportModalOpen(false);
     } finally {
       setIsGeneratingReport(false);
@@ -264,7 +273,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
 
   const handleDownloadCsv = async () => {
     if (userTimeEntries.length === 0) {
-      alert('No entries to download.');
+      showToast('No entries to download.', 'warning');
       return;
     }
     const dataToExport = userTimeEntries.map((entry) => {
@@ -296,8 +305,9 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
       a.click();
       window.URL.revokeObjectURL(url);
       a.remove();
+      showToast('CSV downloaded successfully.', 'success');
     } catch (error) {
-      alert(`Failed to download CSV: ${error.message}`);
+      showToast(`Failed to download CSV: ${error.message}`, 'error');
     }
   };
 
@@ -309,8 +319,8 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
             <h2 className="text-2xl font-semibold text-slate-700">My Timesheet</h2>
             <div className="flex items-center gap-2 flex-wrap justify-center">
               <div className="bg-slate-100 p-1 rounded-lg flex items-center mr-2 shadow-inner">
-                 <button onClick={() => setDashboardViewMode('table')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${dashboardViewMode === 'table' ? 'bg-white text-blue-600 shadow' : 'text-slate-500 hover:text-slate-700'}`}><TableIcon /> Table</button>
-                 <button onClick={() => setDashboardViewMode('card')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${dashboardViewMode === 'card' ? 'bg-white text-blue-600 shadow' : 'text-slate-500 hover:text-slate-700'}`}><GridIcon /> Cards</button>
+                <button onClick={() => setDashboardViewMode('table')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${dashboardViewMode === 'table' ? 'bg-white text-blue-600 shadow' : 'text-slate-500 hover:text-slate-700'}`}><TableIcon /> Table</button>
+                <button onClick={() => setDashboardViewMode('card')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${dashboardViewMode === 'card' ? 'bg-white text-blue-600 shadow' : 'text-slate-500 hover:text-slate-700'}`}><GridIcon /> Cards</button>
               </div>
               <button onClick={handleStartTimer} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg shadow-md hover:bg-green-600 transition-transform hover:scale-105">
                 <PlayIcon /> Start
@@ -324,64 +334,64 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
           {dashboardViewMode === 'table' ? (
             <>
               {/* Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-4 text-sm">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Date</label>
-              <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Project</label>
-              <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
-                <option value="">All Projects</option>
-                {userProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
-              <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
-                <option value="">All Companies</option>
-                {userCompanies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Stakeholder</label>
-              <select value={stakeholderFilter} onChange={(e) => setStakeholderFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
-                <option value="">All Stakeholders</option>
-                {userStakeholders.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Activity Type</label>
-              <select value={activityFilter} onChange={(e) => setActivityFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
-                <option value="">All Activities</option>
-                {userActivityTypes.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Priority</label>
-              <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
-                <option value="">All Priorities</option>
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Search Description</label>
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="w-full p-2 border border-slate-300 rounded-md bg-white" />
-            </div>
-          </div>
-          {hasActiveFilters && (
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm text-slate-500">{userTimeEntries.length} {userTimeEntries.length === 1 ? 'entry' : 'entries'} found</span>
-              <button onClick={clearFilters} className="text-sm text-sky-600 hover:text-sky-800 font-medium">Clear all filters</button>
-            </div>
-          )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-4 text-sm">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Date</label>
+                  <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Project</label>
+                  <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
+                    <option value="">All Projects</option>
+                    {userProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
+                  <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
+                    <option value="">All Companies</option>
+                    {userCompanies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Stakeholder</label>
+                  <select value={stakeholderFilter} onChange={(e) => setStakeholderFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
+                    <option value="">All Stakeholders</option>
+                    {userStakeholders.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Activity Type</label>
+                  <select value={activityFilter} onChange={(e) => setActivityFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
+                    <option value="">All Activities</option>
+                    {userActivityTypes.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Priority</label>
+                  <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
+                    <option value="">All Priorities</option>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Search Description</label>
+                  <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="w-full p-2 border border-slate-300 rounded-md bg-white" />
+                </div>
+              </div>
+              {hasActiveFilters && (
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm text-slate-500">{userTimeEntries.length} {userTimeEntries.length === 1 ? 'entry' : 'entries'} found</span>
+                  <button onClick={clearFilters} className="text-sm text-sky-600 hover:text-sky-800 font-medium">Clear all filters</button>
+                </div>
+              )}
 
-          <TimeEntryList entries={userTimeEntries} allUsers={fullDb.users} fullDb={fullDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} />
+              <TimeEntryList entries={userTimeEntries} allUsers={fullDb.users} fullDb={fullDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} currentUserId={user.id} />
             </>
           ) : (
-            <EmployeeCardView projects={userProjects} subProjects={userSubProjects} timeEntries={userTimeEntries} allUsers={fullDb.users} fullDb={fullDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} />
+            <EmployeeCardView projects={userProjects} subProjects={userSubProjects} timeEntries={userTimeEntries} allUsers={fullDb.users} fullDb={fullDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} currentUserId={user.id} />
           )}
         </div>
       ) : (
@@ -400,7 +410,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
             <div className="xl:col-span-3">
-              <ProjectConfig projects={userProjects} companies={userCompanies} stakeholders={userStakeholders} onAdd={handleAddProject} onDelete={handleDeleteItem('projects')} />
+              <ProjectConfig projects={userProjects} companies={userCompanies} onAdd={handleAddProject} onDelete={handleDeleteItem('projects')} onUpdate={handleUpdateProject} />
             </div>
             <div className="xl:col-span-3">
               <SubProjectConfig projects={userProjects} subProjects={userSubProjects} onAdd={handleAddSubProject} onDelete={handleDeleteItem('subProjects')} />
@@ -439,6 +449,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
           onSave={handleAiFill}
         />
       )}
+      <Toast toasts={toasts} onRemove={removeToast} />
     </MainLayout>
   );
 }

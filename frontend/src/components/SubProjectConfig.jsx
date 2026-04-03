@@ -4,13 +4,15 @@ import { DeleteIcon } from './Icons';
 export default function SubProjectConfig({ projects, subProjects, onAdd, onDelete }) {
   const [selectedProject, setSelectedProject] = useState('');
   const [newItemName, setNewItemName] = useState('');
+  const [addError, setAddError] = useState('');
 
   const handleAdd = (e) => {
     e.preventDefault();
-    if (newItemName.trim() && selectedProject) {
-      onAdd(newItemName.trim(), selectedProject);
-      setNewItemName('');
-    }
+    setAddError('');
+    if (!selectedProject) { setAddError('Please select a project first.'); return; }
+    if (!newItemName.trim()) { setAddError('Sub-project name cannot be empty.'); return; }
+    onAdd(newItemName.trim(), selectedProject);
+    setNewItemName('');
   };
 
   const projectSubProjects = useMemo(() => subProjects.filter((sp) => sp.projectId === selectedProject), [subProjects, selectedProject]);
@@ -26,9 +28,12 @@ export default function SubProjectConfig({ projects, subProjects, onAdd, onDelet
       </div>
       {selectedProject && (
         <>
-          <form onSubmit={handleAdd} className="flex gap-2 mb-4">
-            <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder="New Sub-Project Name..." className="flex-grow p-2 border border-slate-300 rounded-md" />
-            <button type="submit" className="px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600">Add</button>
+          <form onSubmit={handleAdd} className="flex flex-col gap-1 mb-4">
+            <div className="flex gap-2">
+              <input type="text" value={newItemName} onChange={(e) => { setNewItemName(e.target.value); setAddError(''); }} placeholder="New Sub-Project Name..." className={`flex-grow p-2 border rounded-md ${addError ? 'border-red-400' : 'border-slate-300'}`} />
+              <button type="submit" className="px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600">Add</button>
+            </div>
+            {addError && <p className="text-xs text-red-500">⚠ {addError}</p>}
           </form>
           <ul className="divide-y divide-slate-200 max-h-60 overflow-y-auto">
             {projectSubProjects.map((item) => (

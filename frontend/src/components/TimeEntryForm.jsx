@@ -16,6 +16,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
   const [priority, setPriority] = useState(initialData?.priority || 'Medium');
   const [workLocation, setWorkLocation] = useState(initialData?.workLocation || 'Office');
   const [teamMemberIds, setTeamMemberIds] = useState(initialData?.teamMemberIds || []);
+  const [stakeholderIds, setStakeholderIds] = useState(initialData?.stakeholderIds || []);
   const [description, setDescription] = useState(initialData?.description || '');
 
   // AI state
@@ -24,6 +25,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiSuccess, setAiSuccess] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const [isVisible, setIsVisible] = useState(false);
   const modalRef = useRef();
@@ -41,6 +43,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       setPriority(initialData.priority || 'Medium');
       setWorkLocation(initialData.workLocation || 'Office');
       setTeamMemberIds(initialData.teamMemberIds || []);
+      setStakeholderIds(initialData.stakeholderIds || []);
       setDescription(initialData.description || '');
     }
   }, [initialData]);
@@ -79,6 +82,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     () => fullDb.subProjects.filter((sp) => sp.projectId === projectId && teamUserIds.includes(sp.createdBy)),
     [fullDb.subProjects, projectId, teamUserIds]
   );
+  const userStakeholders = useMemo(() => fullDb.stakeholders.filter((s) => teamUserIds.includes(s.createdBy)), [fullDb.stakeholders, teamUserIds]);
 
   const selectedProject = userProjects.find((p) => p.id === projectId);
   const companies = useMemo(() => {
@@ -86,12 +90,6 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     const ids = selectedProject.companyIds || (selectedProject.companyId ? [selectedProject.companyId] : []);
     return fullDb.companies.filter(c => ids.includes(c.id));
   }, [selectedProject, fullDb.companies]);
-
-  const stakeholders = useMemo(() => {
-    if (!selectedProject) return [];
-    const ids = selectedProject.stakeholderIds || (selectedProject.stakeholderId ? [selectedProject.stakeholderId] : []);
-    return fullDb.stakeholders.filter(s => ids.includes(s.id));
-  }, [selectedProject, fullDb.stakeholders]);
 
   // Derived char state
   const charCount = aiPrompt.length;
@@ -162,10 +160,11 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (hours <= 0 || !activityTypeId || !projectId || !subProjectId) {
-      alert('Please fill all required fields (Project, Sub-Project, Activity) and ensure end time is after start time.');
-      return;
-    }
+    setFormError('');
+    if (!projectId) { setFormError('Please select a Project.'); return; }
+    if (!subProjectId) { setFormError('Please select a Sub-Project.'); return; }
+    if (!activityTypeId) { setFormError('Please select an Activity Type.'); return; }
+    if (hours <= 0) { setFormError('End time must be after start time.'); return; }
     onSaveEntry({
       id: isEditing ? initialData.id : undefined,
       userId,
@@ -179,6 +178,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       priority,
       workLocation,
       teamMemberIds,
+      stakeholderIds,
       description,
     });
   };
@@ -370,12 +370,6 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
                 <input type="text" value={companies.map(c => c.name).join(', ') || ''} readOnly className={readOnlyInputClasses} />
               </div>
 
-              {/* Stakeholder (auto) */}
-              <div>
-                <label className={labelClasses}>Stakeholders <span className="text-xs text-slate-400">(auto)</span></label>
-                <input type="text" value={stakeholders.map(s => s.name).join(', ') || ''} readOnly className={readOnlyInputClasses} />
-              </div>
-
               {/* Activity Type */}
               <div>
                 <label className={labelClasses}>Activity Type <span className="text-red-400">*</span></label>
@@ -406,8 +400,8 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
               </div>
 
               {/* Team Members */}
-              <div className="md:col-span-2">
-                <label className={labelClasses}>Team Members <span className="text-xs text-slate-400">(Hold Ctrl/Cmd for multiple)</span></label>
+              <div>
+                <label className={labelClasses}>Team Members <span className="text-xs text-slate-400">(Ctrl/Cmd+click)</span></label>
                 <select
                   multiple
                   value={teamMemberIds}
@@ -415,6 +409,19 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
                   className={`${inputClasses} h-24`}
                 >
                   {userTeamMembers.map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+                </select>
+              </div>
+
+              {/* Stakeholders */}
+              <div>
+                <label className={labelClasses}>Stakeholders <span className="text-xs text-slate-400">(Ctrl/Cmd+click)</span></label>
+                <select
+                  multiple
+                  value={stakeholderIds}
+                  onChange={(e) => setStakeholderIds(Array.from(e.target.selectedOptions, (o) => o.value))}
+                  className={`${inputClasses} h-24`}
+                >
+                  {userStakeholders.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
 
@@ -447,13 +454,20 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
           </div>
 
           {/* Footer */}
-          <div className="p-6 bg-slate-50 flex justify-end gap-3 border-t">
-            <button type="button" onClick={handleClose} className="px-4 py-2 bg-slate-200 rounded-lg text-sm hover:bg-slate-300 transition-colors">
-              Cancel
-            </button>
-            <button type="submit" className="px-6 py-2 bg-sky-500 text-white rounded-lg text-sm font-medium hover:bg-sky-600 transition-colors shadow-sm">
-              Save Entry
-            </button>
+          <div className="p-6 bg-slate-50 border-t">
+            {formError && (
+              <div className="mb-3 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                <span>⚠</span> {formError}
+              </div>
+            )}
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={handleClose} className="px-4 py-2 bg-slate-200 rounded-lg text-sm hover:bg-slate-300 transition-colors">
+                Cancel
+              </button>
+              <button type="submit" className="px-6 py-2 bg-sky-500 text-white rounded-lg text-sm font-medium hover:bg-sky-600 transition-colors shadow-sm">
+                Save Entry
+              </button>
+            </div>
           </div>
         </form>
       </div>

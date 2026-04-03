@@ -16,7 +16,13 @@ export const create = (Model) => async (req, res) => {
 export const update = (Model) => async (req, res) => {
   const item = await Model.findById(req.params.id);
   if (!item) return res.status(404).json({ error: 'Item not found' });
-  if (req.body.name) item.name = req.body.name;
+  
+  Object.keys(req.body).forEach(key => {
+    if (key !== 'id' && key !== '_id' && key !== '__v' && req.body[key] !== undefined) {
+      item[key] = req.body[key];
+    }
+  });
+
   await item.save();
   res.json(item);
 };

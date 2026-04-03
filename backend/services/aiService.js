@@ -15,7 +15,7 @@ if (apiKey) {
   console.log('WARNING: GEMINI_API_KEY not found. AI features will be disabled.');
 }
 
-export async function generateSummary(timeEntries, fullDb) {
+export async function generateSummary(timeEntries, fullDb, reportType = 'employee') {
   if (!ai) {
     throw Object.assign(new Error('Gemini API is not configured on the server.'), { statusCode: 500 });
   }
@@ -26,29 +26,134 @@ export async function generateSummary(timeEntries, fullDb) {
 
   const userMap = Object.fromEntries((fullDb.users || []).map((u) => [u.id, u.name]));
   const projectMap = Object.fromEntries((fullDb.projects || []).map((p) => [p.id, p.name]));
+  const subProjectMap = Object.fromEntries((fullDb.subProjects || []).map((sp) => [sp.id, sp.name]));
+  const activityMap = Object.fromEntries((fullDb.activityTypes || []).map((a) => [a.id, a.name]));
 
   const simplified = timeEntries.map((entry) => ({
     employee: userMap[entry.userId] || 'Unknown',
     project: projectMap[entry.projectId] || 'Unknown',
+    subProject: subProjectMap[entry.subProjectId] || 'N/A',
+    activity: activityMap[entry.activityTypeId] || 'N/A',
     date: entry.date,
     hours: entry.hours,
     description: entry.description || 'N/A',
   }));
 
-  const prompt = `
-You are an expert project manager analyzing a team's timesheet data.
-Based on the following JSON data of time entries, provide a concise, professional summary.
-Your summary should highlight:
-1.  The total hours logged.
-2.  Which projects received the most attention.
-3.  Any potential patterns or insights a manager should be aware of.
-4.  Use bullet points for clarity.
+  // Compute date range
+  const dates = timeEntries.map(e => e.date).filter(Boolean).sort();
+  const startDate = dates[0] || 'N/A';
+  const endDate = dates[dates.length - 1] || 'N/A';
+  const totalHours = timeEntries.reduce((sum, e) => sum + (e.hours || 0), 0).toFixed(2);
 
-Do not just list the data; provide actionable insights.
+  let prompt;
+
+  if (reportType === 'manager') {
+    prompt = `You are an expert project manager generating a TEAM PERFORMANCE REPORT from timesheet data.
+You MUST follow this EXACT structure — use the same headings and table formats every time. Do NOT deviate.
+
+---
+
+## Team Performance Report
+**Period:** ${startDate} to ${endDate}
+**Total Hours Logged:** ${totalHours} hrs
+
+---
+
+### Summary
+Write 3-5 bullet points summarizing overall team performance, key accomplishments, and any concerns.
+
+---
+
+### Employee-wise Breakdown
+
+For EACH employee in the data, create a section like this:
+
+#### [Employee Name]
+- **Total Hours:** X hrs
+
+| Project | Sub-Project | Activity | Hours | Key Work |
+|---------|------------|----------|-------|----------|
+| ... | ... | ... | ... | brief summary |
+
+---
+
+### Project Overview
+
+| Project | Total Hours | Contributors | % of Total |
+|---------|-------------|-------------|------------|
+| ... | ... | ... | ... |
+
+---
+
+### Insights & Recommendations
+Write 3-5 actionable bullet points about workload balance, project focus, and productivity patterns.
+
+---
+
+RULES:
+- Use ONLY the data provided. Do NOT invent data.
+- Every table must have the exact column headers shown above.
+- Keep "Key Work" to under 10 words per row.
+- DO NOT add extra sections or change the headings.
+- Use markdown tables with proper alignment.
+- Round hours to 2 decimal places.
 
 Data:
-${JSON.stringify(simplified, null, 2)}
-`;
+${JSON.stringify(simplified, null, 2)}`;
+  } else {
+    prompt = `You are a professional assistant generating a PERSONAL TIMESHEET REPORT from an employee's time entries.
+You MUST follow this EXACT structure — use the same headings and table formats every time. Do NOT deviate.
+
+---
+
+## My Timesheet Report
+**Period:** ${startDate} to ${endDate}
+**Total Hours Logged:** ${totalHours} hrs
+
+---
+
+### Summary
+Write 3-5 bullet points summarizing productivity, focus areas, and accomplishments during this period.
+
+---
+
+### Project-wise Breakdown
+
+For EACH project in the data, create a section like this:
+
+#### [Project Name]
+- **Total Hours:** X hrs
+
+| Date | Sub-Project | Activity | Hours | Description |
+|------|------------|----------|-------|-------------|
+| ... | ... | ... | ... | brief summary |
+
+---
+
+### Time Distribution
+
+| Project | Hours | % of Total |
+|---------|-------|------------|
+| ... | ... | ... |
+
+---
+
+### Highlights & Notes
+Write 3-5 bullet points about key accomplishments, challenges faced, or things to follow up on.
+
+---
+
+RULES:
+- Use ONLY the data provided. Do NOT invent data.
+- Every table must have the exact column headers shown above.
+- Keep descriptions to under 10 words per row.
+- DO NOT add extra sections or change the headings.
+- Use markdown tables with proper alignment.
+- Round hours to 2 decimal places.
+
+Data:
+${JSON.stringify(simplified, null, 2)}`;
+  }
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
@@ -95,23 +200,23 @@ export async function generateProjectConfig(userPrompt, existingProjectNames) {
     throw Object.assign(new Error('No prompt provided.'), { statusCode: 400 });
   }
 
-  const existingNames = (existingProjectNames || []).join(', ') || 'none';
+  const existingNames = 'none'; // Unused, keeping signature backward-compatible
 
   const systemPrompt = `You are a project configuration assistant. Based on the user's description, extract and return ONLY a valid JSON object (no markdown fences, no explanation) with exactly this structure:
 
 {
-  "projectName": "<unique project name - must NOT match any of these existing names: ${existingNames}>",
-  "companyNames": ["<company 1>", "<company 2>"],
+  "projectName": "<short project name inferred from the description, 1-3 words, title-case>",
   "purpose": "<brief purpose or objective of the project, 1-2 sentences>",
-  "stakeholderNames": ["<stakeholder 1>", "<stakeholder 2>"],
   "subProjects": ["<sub-project 1>", "<sub-project 2>", "<sub-project 3>"]
 }
 
 Rules:
-- projectName must be short, clear and unique compared to existing names.
-- companyNames and stakeholderNames must be arrays. Extract all relevant entities.
-- subProjects must be an array of 2 to 5 logical work-streams or phases.
-- If any field cannot be inferred, make a reasonable professional guess.
+- projectName must be a short, meaningful title for the project (1–3 words, title-case) inferred from the user's description.
+- purpose must define the core goal logically.
+- subProjects must be an array of AT LEAST 10 logical work-streams, modules, or functional areas.
+- CRITICAL: Every subProject name must be AT MOST 3 WORDS. Use concise module-style names like "AI Chatbot Engine", "HR Admin Dashboard", "Auth & Permissions", "Analytics Module", "Deployment & Infrastructure".
+- IMPORTANT: Ensure the subProjects are NOT generic. They MUST be highly specific and tailored based on the user's role and the project described.
+- For software engineering, web development, or backend development roles, generate subprojects that reflect real technical components: e.g. frontend UI, backend API, database layer, auth system, admin portal, integrations, testing, deployment, etc. — named in 3 words or fewer.
 - Return ONLY the raw JSON object. No markdown. No extra text.
 
 User description:
@@ -178,6 +283,7 @@ Rules:
 - Return ONLY the raw JSON object. No markdown fences. No explanation.
 
 User task description:
+
 ${userPrompt}`;
 
   const response = await ai.models.generateContent({

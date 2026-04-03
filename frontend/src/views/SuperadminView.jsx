@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import api from '../api';
 import { PlusIcon, EditIcon, DeleteIcon } from '../components/Icons';
+import Toast, { useToast } from '../components/Toast';
 
 export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
+  const { toasts, showToast, removeToast } = useToast();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const initialFormData = { name: '', email: '', roles: ['Employee'], reportsTo: '' };
@@ -28,8 +30,9 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
       try {
         const updatedUser = await api.updateUser(userId, { ...userToUpdate, active: !currentStatus });
         setUsers(allUsers.map((u) => (u.id === userId ? updatedUser : u)));
+        showToast(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully.`, 'success');
       } catch (error) {
-        alert(`Failed to update user status: ${error.message}`);
+        showToast(`Failed to update user status: ${error.message}`, 'error');
       }
     }
   };
@@ -39,20 +42,33 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
       try {
         await api.deleteItem('users', userId);
         setUsers(allUsers.filter((u) => u.id !== userId));
+        showToast('User deleted successfully.', 'info');
       } catch (error) {
-        alert(`Failed to delete user: ${error.message}`);
+        showToast(`Failed to delete user: ${error.message}`, 'error');
       }
     }
   };
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.name.trim()) {
+      showToast('Name is required.', 'warning');
+      return;
+    }
+    if (!formData.email.trim()) {
+      showToast('Email is required.', 'warning');
+      return;
+    }
     if (allUsers.some((u) => u.email.toLowerCase() === formData.email.toLowerCase() && u.id !== editingUser?.id)) {
-      alert('A user with this email already exists.');
+      showToast('A user with this email already exists.', 'warning');
       return;
     }
     if (formData.roles.includes('Employee') && managers.length === 0) {
-      alert('Cannot create an employee because no managers exist. Please create a manager first.');
+      showToast('Cannot create an employee because no managers exist. Please create a manager first.', 'warning');
+      return;
+    }
+    if (formData.roles.includes('Employee') && !formData.reportsTo) {
+      showToast('Please select a manager for this employee.', 'warning');
       return;
     }
     const payload = {
@@ -63,14 +79,16 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
       if (editingUser) {
         const updatedUser = await api.updateUser(editingUser.id, payload);
         setUsers(allUsers.map((u) => (u.id === editingUser.id ? updatedUser : u)));
+        showToast('User updated successfully.', 'success');
       } else {
         const newUser = await api.createUser({ ...payload, active: true });
         setUsers([...allUsers, newUser]);
+        showToast('User created successfully.', 'success');
       }
       setIsFormOpen(false);
       setEditingUser(null);
     } catch (error) {
-      alert(`Failed to save user: ${error.message}`);
+      showToast(`Failed to save user: ${error.message}`, 'error');
     }
   };
 
@@ -166,6 +184,7 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
           </div>
         </div>
       </main>
+      <Toast toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }

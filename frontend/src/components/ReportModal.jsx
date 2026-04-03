@@ -40,7 +40,7 @@ export default function ReportModal({ reportData, isGenerating, onClose }) {
           ) : reportData ? (
             <div 
               ref={contentRef}
-              className="prose prose-indigo max-w-none text-slate-700 [&>h1]:text-2xl [&>h1]:font-bold [&>h2]:text-xl [&>h2]:font-bold [&>h3]:text-lg [&>ul]:list-disc [&>ul]:ml-6 [&>ul>li]:mb-2 [&>p]:mb-4"
+              className="prose prose-indigo max-w-none text-slate-700 [&>h1]:text-2xl [&>h1]:font-bold [&>h2]:text-xl [&>h2]:font-bold [&>h3]:text-lg [&>h3]:font-semibold [&>h4]:text-base [&>h4]:font-semibold [&>ul]:list-disc [&>ul]:ml-6 [&>ul>li]:mb-2 [&>p]:mb-4 [&>hr]:my-4 [&>hr]:border-slate-200 [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_table]:my-4 [&_th]:bg-indigo-50 [&_th]:text-indigo-700 [&_th]:font-semibold [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:border [&_th]:border-indigo-200 [&_td]:px-3 [&_td]:py-2 [&_td]:border [&_td]:border-slate-200 [&_tr:nth-child(even)]:bg-slate-50 [&_strong]:text-slate-800"
               dangerouslySetInnerHTML={{ __html: marked.parse(reportData) }}
             />
           ) : (

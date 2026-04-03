@@ -7,8 +7,8 @@ import ActivityType from '../models/ActivityType.js';
 import TeamMember from '../models/TeamMember.js';
 
 export const generateSummary = async (req, res) => {
-  const { timeEntries, fullDb } = req.body;
-  const summary = await aiGenerateSummary(timeEntries, fullDb);
+  const { timeEntries, fullDb, reportType } = req.body;
+  const summary = await aiGenerateSummary(timeEntries, fullDb, reportType || 'employee');
   res.json({ summary });
 };
 

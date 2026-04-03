@@ -129,7 +129,7 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
     setIsSummaryLoading(true);
     setSummaryError('');
     try {
-      const result = await api.generateSummary(filteredEntries, fullDb);
+      const result = await api.generateSummary(filteredEntries, fullDb, 'manager');
       setSummary(result.summary);
     } catch (error) {
       setSummaryError(error.message || 'An unknown error occurred.');

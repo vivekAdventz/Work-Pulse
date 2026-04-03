@@ -65,7 +65,7 @@ const api = {
 
   // Data endpoints
   getAllData: () => api.request('/all-data'),
-  generateSummary: (timeEntries, fullDb) => api.request('/generate-summary', 'POST', { timeEntries, fullDb }),
+  generateSummary: (timeEntries, fullDb, reportType = 'employee') => api.request('/generate-summary', 'POST', { timeEntries, fullDb, reportType }),
   generateDescription: (prompt) => api.request('/generate-description', 'POST', { prompt }),
   downloadCsv: (entries) => api.request('/download-csv', 'POST', { entries }, 'blob'),
   updateUser: (userId, userData) => api.request(`/users/${userId}`, 'PUT', userData),
