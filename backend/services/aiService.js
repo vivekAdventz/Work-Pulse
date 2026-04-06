@@ -302,3 +302,68 @@ ${userPrompt}`;
     throw Object.assign(new Error('AI returned invalid JSON. Please try again.'), { statusCode: 500 });
   }
 }
+
+export async function generateTaskPlan(projectName, subProjectName, description, teamMembers, subProjects) {
+  if (!ai) {
+    throw Object.assign(new Error('Gemini API is not configured on the server.'), { statusCode: 500 });
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const teamList = (teamMembers || []).map(t => `- id: "${t.id}", name: "${t.name}"`).join('\n') || 'none';
+  const subProjList = (subProjects || []).map(sp => `- id: "${sp.id}", name: "${sp.name}"`).join('\n') || 'none';
+
+  const systemPrompt = `You are a project planner. Given a project, phase, and description, generate a task plan across multiple days.
+
+Return ONLY a valid JSON array (no markdown, no extra text) with this structure:
+[
+  {
+    "taskNumber": 1,
+    "title": "short task title (max 10 words)",
+    "description": "1-2 sentence description of the task",
+    "date": "YYYY-MM-DD",
+    "assigneeId": "best matching team member id or null",
+    "subProjectId": "best matching sub-project id or null",
+    "dependsOn": null or taskNumber of the prerequisite task
+  },
+  ...
+]
+
+RULES:
+- Generate 5-15 tasks spread across 3-7 days starting from ${today}
+- Each task must have a date in YYYY-MM-DD format
+- Tasks on a given day can ONLY depend on tasks from the SAME day or EARLIER days, NEVER later days
+- dependsOn references the taskNumber (integer) of the prerequisite task, or null if none
+- Assign tasks to team members from the list. Distribute work evenly.
+- Map each task to the most relevant sub-project from the list.
+- Tasks should follow a logical execution order (planning → implementation → review → testing)
+- Skip weekends (Saturday=6, Sunday=0)
+- Return ONLY the raw JSON array. No markdown fences.
+
+Project: ${projectName}
+Phase: ${subProjectName}
+Description: ${description}
+
+Available team members:
+${teamList}
+
+Available sub-projects (phases):
+${subProjList}`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: systemPrompt,
+  });
+
+  const raw = response.text.trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '');
+
+  try {
+    const tasks = JSON.parse(raw);
+    if (!Array.isArray(tasks)) throw new Error('Not an array');
+    return tasks;
+  } catch {
+    throw Object.assign(new Error('AI returned invalid plan. Please try again with a clearer description.'), { statusCode: 500 });
+  }
+}

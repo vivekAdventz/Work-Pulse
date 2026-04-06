@@ -24,14 +24,14 @@ const ICONS = {
 };
 
 const STYLES = {
-  success: 'bg-emerald-50 border-emerald-300 text-emerald-800',
+  success: 'bg-green-500 border-green-600 text-white',
   error:   'bg-red-50 border-red-300 text-red-800',
   info:    'bg-sky-50 border-sky-300 text-sky-800',
   warning: 'bg-amber-50 border-amber-300 text-amber-800',
 };
 
 const ICON_STYLES = {
-  success: 'text-emerald-500',
+  success: 'text-white',
   error:   'text-red-500',
   info:    'text-sky-500',
   warning: 'text-amber-500',

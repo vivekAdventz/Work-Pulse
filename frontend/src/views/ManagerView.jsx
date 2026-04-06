@@ -8,8 +8,12 @@ import BarChart from '../components/charts/BarChart';
 import ProjectSummaryTable from '../components/charts/ProjectSummaryTable';
 import ManagerCalendarView from './ManagerCalendarView';
 import { SparklesIcon, ListIcon, CalendarIcon } from '../components/common/Icons';
+import TaskKeepView from '../components/taskkeep/TaskKeepView';
+import TimeEntryForm from '../components/timeentry/TimeEntryForm';
+import Toast, { useToast } from '../components/common/Toast';
 
 export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
+  const { toasts, showToast, removeToast } = useToast();
   const { users: allUsers, timeEntries: allEntries } = fullDb;
 
   // Compute hierarchy levels: level 1 = direct reports, level 2 = their reports, etc.
@@ -44,6 +48,11 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
   const reportIds = useMemo(() => visibleReportees.map((r) => r.id), [visibleReportees]);
   const relevantUserIds = useMemo(() => [user.id, ...reportIds], [user.id, reportIds]);
   const [dashboardView, setDashboardView] = useState('dashboard');
+  const [activeView, setActiveView] = useState('dashboard');
+
+  // TaskKeep TimeEntryForm state
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formInitialData, setFormInitialData] = useState(null);
 
   const defaultEndDate = new Date();
   const defaultStartDate = new Date();
@@ -143,8 +152,50 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
     if (modalRef.current === e.target) setIsSummaryModalOpen(false);
   };
 
+  const handleSaveEntry = async (entryData) => {
+    try {
+      await api.addTimeEntry(entryData);
+      // If this came from TaskKeep done flow, finalize the done status
+      if (formInitialData?._taskKeepDayId && formInitialData?._taskKeepTaskId) {
+        try {
+          await api.updateTaskInDay(formInitialData._taskKeepDayId, formInitialData._taskKeepTaskId, { status: 'done' });
+          formInitialData._refreshTaskKeep?.();
+        } catch (e) { console.error('Failed to finalize task status:', e); }
+      }
+      setIsFormOpen(false);
+      setFormInitialData(null);
+    } catch (error) {
+      console.error('Failed to save time entry:', error);
+    }
+  };
+
   return (
-    <MainLayout user={user} onLogout={onLogout} hasBothRoles={hasBothRoles} activeRole={activeRole} onToggleRole={onToggleRole}>
+    <>
+    <MainLayout user={user} onLogout={onLogout} activeView={activeView} onNavigate={setActiveView} hasBothRoles={hasBothRoles} activeRole={activeRole} onToggleRole={onToggleRole}>
+      {activeView === 'taskkeep' ? (
+        <>
+          <TaskKeepView
+            user={user}
+            fullDb={fullDb}
+            setFullDb={() => {}}
+            isManager={true}
+            showToast={showToast}
+            onOpenTimeEntryForm={(prefill) => {
+              setFormInitialData(prefill);
+              setIsFormOpen(true);
+            }}
+          />
+          {isFormOpen && (
+            <TimeEntryForm
+              userId={user.id}
+              onSaveEntry={handleSaveEntry}
+              onClose={() => { setIsFormOpen(false); setFormInitialData(null); }}
+              fullDb={fullDb}
+              initialData={formInitialData}
+            />
+          )}
+        </>
+      ) : (
       <div className="space-y-4 animate-fadeIn">
         {/* Top row: Header/Filters + Project Distribution side by side */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -334,6 +385,9 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
           <ManagerCalendarView entries={filteredEntries} fullDb={fullDb} directReports={visibleReportees} />
         )}
       </div>
+      )}
     </MainLayout>
+    <Toast toasts={toasts} onRemove={removeToast} />
+    </>
   );
 }

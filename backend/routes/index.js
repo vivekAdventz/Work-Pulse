@@ -5,6 +5,7 @@ import userRoutes from './users.js';
 import dataRoutes from './data.js';
 import timeEntryRoutes from './timeEntries.js';
 import aiRoutes from './ai.js';
+import taskKeepRoutes from './taskKeep.js';
 import { createCrudRouter } from './crud.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -28,6 +29,7 @@ router.use('/users', userRoutes);
 router.use('/', dataRoutes);
 router.use('/timeEntries', timeEntryRoutes);
 router.use('/', aiRoutes);
+router.use('/taskKeep', taskKeepRoutes);
 
 // Generic CRUD routes
 router.use('/companies', createCrudRouter(Company));

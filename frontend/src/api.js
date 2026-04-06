@@ -79,6 +79,18 @@ const api = {
   deleteTimeEntry: (entryId) => api.request(`/timeEntries/${entryId}`, 'DELETE'),
   fillByAI: (prompt) => api.request('/fill-by-ai', 'POST', { prompt }),
   fillEntryByAI: (prompt) => api.request('/fill-entry-by-ai', 'POST', { prompt }),
+
+  // TaskKeep endpoints
+  getTaskDays: () => api.request('/taskKeep'),
+  createTaskDay: (date) => api.request('/taskKeep', 'POST', { date }),
+  updateTaskDay: (dayId, data) => api.request(`/taskKeep/${dayId}`, 'PUT', data),
+  deleteTaskDay: (dayId) => api.request(`/taskKeep/${dayId}`, 'DELETE'),
+  addTaskToDay: (dayId, taskData) => api.request(`/taskKeep/${dayId}/tasks`, 'POST', taskData),
+  updateTaskInDay: (dayId, taskId, taskData) => api.request(`/taskKeep/${dayId}/tasks/${taskId}`, 'PUT', taskData),
+  deleteTaskFromDay: (dayId, taskId) => api.request(`/taskKeep/${dayId}/tasks/${taskId}`, 'DELETE'),
+  moveTask: (dayId, taskId, targetDate) => api.request(`/taskKeep/${dayId}/tasks/${taskId}/move`, 'POST', { targetDate }),
+  generatePlan: (data) => api.request('/taskKeep/generate-plan', 'POST', data),
+  executePlan: (data) => api.request('/taskKeep/execute-plan', 'POST', data),
 };
 
 export default api;

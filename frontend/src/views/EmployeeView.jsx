@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import api from '../api';
 import MainLayout from '../components/layout/MainLayout';
 import TimeEntryList from '../components/timeentry/TimeEntryList';
@@ -12,6 +12,7 @@ import ProjectConfig from '../components/config/ProjectConfig';
 import AiFillModal from '../components/modals/AiFillModal';
 import Toast, { useToast } from '../components/common/Toast';
 import { PlusIcon, PlayIcon, GridIcon, TableIcon, AiWandIcon } from '../components/common/Icons';
+import TaskKeepView from '../components/taskkeep/TaskKeepView';
 
 export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
   const { toasts, showToast, removeToast } = useToast();
@@ -45,6 +46,13 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
         const newEntry = await api.addTimeEntry(entryData);
         setFullDb((prev) => ({ ...prev, timeEntries: [...prev.timeEntries, newEntry] }));
         showToast('Time entry added successfully.', 'success');
+      }
+      // If this came from TaskKeep done flow, finalize the done status
+      if (formInitialData?._taskKeepDayId && formInitialData?._taskKeepTaskId) {
+        try {
+          await api.updateTaskInDay(formInitialData._taskKeepDayId, formInitialData._taskKeepTaskId, { status: 'done' });
+          formInitialData._refreshTaskKeep?.();
+        } catch (e) { console.error('Failed to finalize task status:', e); }
       }
       setIsFormOpen(false);
       setFormInitialData(null);
@@ -420,6 +428,18 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
           )}
         </div>
       </div>
+      ) : activeView === 'taskkeep' ? (
+        <TaskKeepView
+          user={user}
+          fullDb={fullDb}
+          setFullDb={setFullDb}
+          isManager={false}
+          showToast={showToast}
+          onOpenTimeEntryForm={(prefill) => {
+            setFormInitialData(prefill);
+            setIsFormOpen(true);
+          }}
+        />
       ) : (
         <div className="space-y-5">
 
