@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import api from '../api';
-import { msalInstance, loginRequest } from '../msalConfig';
+import api from '../../api';
+import { msalInstance, loginRequest } from '../../msalConfig';
 
 function TimesheetIllustration() {
   return (

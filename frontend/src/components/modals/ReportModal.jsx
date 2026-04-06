@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { marked } from 'marked';
 import html2pdf from 'html2pdf.js';
-import { SparklesIcon, DownloadIcon } from './Icons';
+import { SparklesIcon, DownloadIcon } from '../common/Icons';
 
 export default function ReportModal({ reportData, isGenerating, onClose }) {
   const contentRef = useRef(null);

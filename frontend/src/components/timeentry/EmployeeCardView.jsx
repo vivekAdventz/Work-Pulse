@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import TimeEntryList from './TimeEntryList';
-import { FolderIcon, ArrowLeftIcon, EmptyIcon } from './Icons';
+import { FolderIcon, ArrowLeftIcon, EmptyIcon } from '../common/Icons';
 
 export default function EmployeeCardView({ projects, subProjects, timeEntries, allUsers, fullDb, onDeleteEntry, onEditEntry, currentUserId }) {
   const [selectedProjectId, setSelectedProjectId] = useState(null);

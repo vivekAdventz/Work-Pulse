@@ -1,4 +1,4 @@
-﻿import { EditIcon, DeleteIcon, EmptyIcon } from './Icons';
+﻿import { EditIcon, DeleteIcon, EmptyIcon } from '../common/Icons';
 
 export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry, onEditEntry, readOnly = false, currentUserId }) {
   if (entries.length === 0) {
@@ -17,7 +17,18 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
   const activityMap = new Map(fullDb.activityTypes.map((a) => [a.id, a.name]));
   const stakeholderMap = new Map(fullDb.stakeholders.map((s) => [s.id, s.name]));
 
-  const headers = ['Date', readOnly ? 'Employee' : null, 'Project', 'Sub-Project', 'Activity', 'Hours', 'Start', 'End', 'Location', 'Priority', 'Stakeholders', 'Description'].filter(Boolean);
+  // Build team member name map: real users + custom team members
+  const teamMemberMap = new Map();
+  allUsers.forEach((u) => teamMemberMap.set(u.id, u.name));
+  (fullDb.teamMembers || []).forEach((tm) => { if (!teamMemberMap.has(tm.id)) teamMemberMap.set(tm.id, tm.name); });
+
+  const headers = [
+    'Date',
+    readOnly ? 'Employee' : 'Created By',
+    'Project', 'Sub-Project', 'Activity', 'Hours', 'Start', 'End', 'Location', 'Priority',
+    'Team Members',
+    'Stakeholders', 'Description'
+  ];
   if (!readOnly) headers.push('Actions');
 
   return (
@@ -34,14 +45,16 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
         </thead>
         <tbody className="bg-white divide-y divide-slate-200">
           {entries.map((entry) => {
+            // Determine if current user is the originator or just a tagged team member
+            const isOriginator = entry.userId === currentUserId;
+            const isTeamMemberOnly = !isOriginator && Array.isArray(entry.teamMemberIds) && entry.teamMemberIds.includes(currentUserId);
+
             return (
               <tr key={entry.id} className="hover:bg-sky-50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
                   {entry.date}
                 </td>
-                {readOnly && (
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{userMap.get(entry.userId) || 'Unknown'}</td>
-                )}
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{userMap.get(entry.userId) || 'Unknown'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{projectMap.get(entry.projectId) || 'N/A'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{subProjectMap.get(entry.subProjectId) || 'N/A'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{activityMap.get(entry.activityTypeId) || 'N/A'}</td>
@@ -50,18 +63,27 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.endTime}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.workLocation}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.priority}</td>
+                <td className="px-6 py-4 text-sm text-slate-600 max-w-xs truncate" title={(entry.teamMemberIds || []).map(id => teamMemberMap.get(id)).filter(Boolean).join(', ')}>
+                  {(entry.teamMemberIds || []).map(id => teamMemberMap.get(id)).filter(Boolean).join(', ') || '—'}
+                </td>
                 <td className="px-6 py-4 text-sm text-slate-600 max-w-xs truncate" title={(entry.stakeholderIds || []).map(id => stakeholderMap.get(id)).filter(Boolean).join(', ')}>
                   {(entry.stakeholderIds || []).map(id => stakeholderMap.get(id)).filter(Boolean).join(', ') || '—'}
                 </td>
                 <td className="px-6 py-4 text-sm text-slate-600 max-w-xs truncate" title={entry.description}>{entry.description}</td>
                 {!readOnly && (
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-2">
-                    <button onClick={() => onEditEntry(entry)} className="text-slate-500 hover:text-sky-600 p-1 transition-colors" aria-label="Edit entry">
-                      <EditIcon />
-                    </button>
-                    <button onClick={() => onDeleteEntry(entry.id)} className="text-slate-500 hover:text-red-600 p-1 transition-colors" aria-label="Delete entry">
-                      <DeleteIcon />
-                    </button>
+                    {isTeamMemberOnly ? (
+                      <span className="text-xs text-slate-400 italic">View Only</span>
+                    ) : (
+                      <>
+                        <button onClick={() => onEditEntry(entry)} className="text-slate-500 hover:text-sky-600 p-1 transition-colors" aria-label="Edit entry">
+                          <EditIcon />
+                        </button>
+                        <button onClick={() => onDeleteEntry(entry.id)} className="text-slate-500 hover:text-red-600 p-1 transition-colors" aria-label="Delete entry">
+                          <DeleteIcon />
+                        </button>
+                      </>
+                    )}
                   </td>
                 )}
               </tr>

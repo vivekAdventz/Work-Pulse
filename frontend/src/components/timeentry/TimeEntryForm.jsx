@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { marked } from 'marked';
-import { AiWandIcon } from './Icons';
-import api from '../api';
+import { AiWandIcon } from '../common/Icons';
+import api from '../../api';
 
 const MIN_CHARS = 100;
 const MAX_CHARS = 300;
@@ -192,9 +192,9 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     if (modalRef.current === e.target) handleClose();
   };
 
-  const inputClasses = 'mt-1 w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-sky-500 outline-none';
-  const readOnlyInputClasses = 'mt-1 w-full p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-500';
-  const labelClasses = 'block text-sm font-medium text-slate-600';
+  const inputClasses = 'mt-1.5 w-full px-3 py-2.5 border-2 border-slate-100 rounded-xl bg-white text-sm font-medium text-slate-700 focus:border-brand-blue/40 focus:ring-0 outline-none transition-all hover:border-slate-200 shadow-sm';
+  const readOnlyInputClasses = 'mt-1.5 w-full px-3 py-2.5 border-2 border-slate-100 rounded-xl bg-slate-50 text-sm text-slate-400 font-medium';
+  const labelClasses = 'block text-[10px] font-bold text-slate-400 uppercase tracking-wider';
 
   return (
     <div
@@ -202,10 +202,14 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       onClick={handleBackdropClick}
       className={`fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
     >
-      <div className={`bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-y-auto transform transition-all duration-300 ${isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
+      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-y-auto transform transition-all duration-300 ${isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
         {/* Header */}
-        <div className="p-6 border-b border-slate-200">
-          <h2 className="text-xl font-semibold text-slate-800">{isEditing ? 'Edit' : 'Add New'} Time Entry</h2>
+        <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 tracking-tight">{isEditing ? 'Edit' : 'Add New'} Time Entry</h2>
+            <p className="text-xs text-slate-400 mt-0.5">{isEditing ? 'Update the details below.' : 'Fill in the details to log your work.'}</p>
+          </div>
+          <button type="button" onClick={handleClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors text-lg leading-none">&times;</button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -401,12 +405,12 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
 
               {/* Team Members */}
               <div>
-                <label className={labelClasses}>Team Members <span className="text-xs text-slate-400">(Ctrl/Cmd+click)</span></label>
+                <label className={labelClasses}>Team Members <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
                 <select
                   multiple
                   value={teamMemberIds}
                   onChange={(e) => setTeamMemberIds(Array.from(e.target.selectedOptions, (o) => o.value))}
-                  className={`${inputClasses} h-24`}
+                  className={`${inputClasses} h-28 overflow-y-auto`}
                 >
                   {userTeamMembers.map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
                 </select>
@@ -414,12 +418,12 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
 
               {/* Stakeholders */}
               <div>
-                <label className={labelClasses}>Stakeholders <span className="text-xs text-slate-400">(Ctrl/Cmd+click)</span></label>
+                <label className={labelClasses}>Stakeholders <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
                 <select
                   multiple
                   value={stakeholderIds}
                   onChange={(e) => setStakeholderIds(Array.from(e.target.selectedOptions, (o) => o.value))}
-                  className={`${inputClasses} h-24`}
+                  className={`${inputClasses} h-28 overflow-y-auto`}
                 >
                   {userStakeholders.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
@@ -454,17 +458,17 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
           </div>
 
           {/* Footer */}
-          <div className="p-6 bg-slate-50 border-t">
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 rounded-b-2xl">
             {formError && (
-              <div className="mb-3 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+              <div className="mb-3 flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
                 <span>⚠</span> {formError}
               </div>
             )}
             <div className="flex justify-end gap-3">
-              <button type="button" onClick={handleClose} className="px-4 py-2 bg-slate-200 rounded-lg text-sm hover:bg-slate-300 transition-colors">
+              <button type="button" onClick={handleClose} className="px-5 py-2 bg-white border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
                 Cancel
               </button>
-              <button type="submit" className="px-6 py-2 bg-sky-500 text-white rounded-lg text-sm font-medium hover:bg-sky-600 transition-colors shadow-sm">
+              <button type="submit" className="px-6 py-2 bg-brand-blue text-white rounded-xl text-sm font-semibold hover:bg-brand-blue-mid transition-all shadow-md shadow-brand-blue/20 hover:-translate-y-0.5 active:translate-y-0">
                 Save Entry
               </button>
             </div>

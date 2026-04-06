@@ -13,7 +13,8 @@ const timeEntrySchema = new mongoose.Schema({
   subProjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubProject' },
   activityTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'ActivityType', required: true },
   teamMemberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'TeamMember' }],
-  stakeholderIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Stakeholder' }]
+  stakeholderIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Stakeholder' }],
+  deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 });
 
 export default mongoose.model('TimeEntry', timeEntrySchema);

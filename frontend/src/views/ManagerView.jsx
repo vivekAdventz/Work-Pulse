@@ -1,13 +1,13 @@
 import { useState, useMemo, useRef } from 'react';
 import { marked } from 'marked';
 import api from '../api';
-import MainLayout from '../components/MainLayout';
-import TimeEntryList from '../components/TimeEntryList';
-import PieChart from '../components/PieChart';
-import BarChart from '../components/BarChart';
-import ProjectSummaryTable from '../components/ProjectSummaryTable';
+import MainLayout from '../components/layout/MainLayout';
+import TimeEntryList from '../components/timeentry/TimeEntryList';
+import PieChart from '../components/charts/PieChart';
+import BarChart from '../components/charts/BarChart';
+import ProjectSummaryTable from '../components/charts/ProjectSummaryTable';
 import ManagerCalendarView from './ManagerCalendarView';
-import { SparklesIcon, ListIcon, CalendarIcon } from '../components/Icons';
+import { SparklesIcon, ListIcon, CalendarIcon } from '../components/common/Icons';
 
 export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
   const { users: allUsers, timeEntries: allEntries } = fullDb;
@@ -60,7 +60,7 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
 
   const [filters, setFilters] = useState(initialFilters);
 
-  const managerProjects = useMemo(() => fullDb.projects.filter((p) => reportIds.includes(p.createdBy)), [fullDb.projects, reportIds]);
+  const managerProjects = useMemo(() => fullDb.projects.filter((p) => relevantUserIds.includes(p.createdBy)), [fullDb.projects, relevantUserIds]);
 
   const filteredProjects = useMemo(() => {
     if (filters.selectedEmployees.length === 0) return managerProjects;
@@ -145,125 +145,119 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
 
   return (
     <MainLayout user={user} onLogout={onLogout} hasBothRoles={hasBothRoles} activeRole={activeRole} onToggleRole={onToggleRole}>
-      <div className="space-y-6 animate-fadeIn">
-        {/* Header Section */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="space-y-4 animate-fadeIn">
+        {/* Top row: Header/Filters + Project Distribution side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Header + Filters */}
+          <div className="lg:col-span-2 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Manager Dashboard</h1>
-              <p className="text-sm text-slate-500 mt-1">Monitor team performance and project progress across levels.</p>
+              <h1 className="text-xl font-bold text-slate-800 tracking-tight">Manager Dashboard</h1>
+              <p className="text-xs text-slate-500 mt-0.5">Monitor team performance and project progress across levels.</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 onClick={handleGenerateSummaryClick}
                 disabled={isSummaryLoading}
-                className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl shadow-lg shadow-sky-100 hover:shadow-sky-200 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-brand-blue rounded-xl shadow-lg shadow-brand-blue/20 hover:bg-brand-blue-mid transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
               >
                 <SparklesIcon /> {isSummaryLoading ? 'Generating...' : 'AI Summary'}
               </button>
               <div className="flex items-center p-1 bg-slate-100 rounded-xl">
-                <button onClick={() => setDashboardView('dashboard')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${dashboardView === 'dashboard' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                <button onClick={() => setDashboardView('dashboard')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${dashboardView === 'dashboard' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                   <ListIcon /> Dashboard
                 </button>
-                <button onClick={() => setDashboardView('calendar')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${dashboardView === 'calendar' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                <button onClick={() => setDashboardView('calendar')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${dashboardView === 'calendar' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                   <CalendarIcon /> Calendar
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Reporting Level */}
-            {maxLevel > 1 && (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Reporting Level</label>
-                <select
-                  value={selectedLevel}
-                  onChange={(e) => handleLevelChange(Number(e.target.value))}
-                  className="w-full p-3 border-2 border-slate-100 rounded-xl bg-slate-50 text-sm font-medium focus:border-sky-500 focus:ring-0 transition-colors outline-none cursor-pointer"
-                >
-                  <option value={0}>All Levels</option>
-                  {Array.from({ length: maxLevel }, (_, i) => i + 1).map((lvl) => (
-                    <option key={lvl} value={lvl}>
-                      Level {lvl} ({(reporteesByLevel[lvl] || []).length} {(reporteesByLevel[lvl] || []).length === 1 ? 'person' : 'people'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Date Range */}
-            <div className="space-y-2 lg:col-span-1">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date Range</label>
-              <div className="flex gap-2">
-                <input type="date" value={filters.startDate} onChange={(e) => handleFilterChange('startDate', e.target.value)} className="flex-1 p-2.5 border-2 border-slate-100 rounded-xl bg-slate-50 text-sm font-medium focus:border-sky-500 transition-colors outline-none" />
-                <input type="date" value={filters.endDate} onChange={(e) => handleFilterChange('endDate', e.target.value)} className="flex-1 p-2.5 border-2 border-slate-100 rounded-xl bg-slate-50 text-sm font-medium focus:border-sky-500 transition-colors outline-none" />
+          <div className="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+            {/* Row 1: Level + Date Range */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {maxLevel > 1 && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reporting Level</label>
+                  <select
+                    value={selectedLevel}
+                    onChange={(e) => handleLevelChange(Number(e.target.value))}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-xs font-medium text-slate-700 focus:border-sky-400 focus:ring-0 outline-none transition-all shadow-sm cursor-pointer"
+                  >
+                    <option value={0}>All Levels</option>
+                    {Array.from({ length: maxLevel }, (_, i) => i + 1).map((lvl) => (
+                      <option key={lvl} value={lvl}>
+                        Level {lvl} ({(reporteesByLevel[lvl] || []).length} {(reporteesByLevel[lvl] || []).length === 1 ? 'person' : 'people'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date Range</label>
+                <div className="flex gap-2">
+                  <input type="date" value={filters.startDate} onChange={(e) => handleFilterChange('startDate', e.target.value)} className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg bg-white text-xs font-medium focus:border-sky-400 transition-colors outline-none shadow-sm" />
+                  <input type="date" value={filters.endDate} onChange={(e) => handleFilterChange('endDate', e.target.value)} className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg bg-white text-xs font-medium focus:border-sky-400 transition-colors outline-none shadow-sm" />
+                </div>
               </div>
             </div>
 
-            {/* Employees Toggle List */}
-            <div className="space-y-2 lg:col-span-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center">
-                Team Selection
-                <span className="text-[10px] text-slate-400 font-normal normal-case">Scroll to see all</span>
-              </label>
-              <div className="flex flex-wrap gap-2 p-3 border-2 border-slate-100 rounded-xl bg-slate-50 max-h-32 overflow-y-auto custom-scrollbar">
-                {visibleReportees.map((dr) => {
-                  const isSelected = filters.selectedEmployees.includes(dr.id);
-                  return (
-                    <button
-                      key={dr.id}
-                      onClick={() => {
-                        const newSelection = isSelected 
-                          ? filters.selectedEmployees.filter(id => id !== dr.id)
-                          : [...filters.selectedEmployees, dr.id];
-                        handleFilterChange('selectedEmployees', newSelection);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border-2 ${
-                        isSelected 
-                        ? 'bg-sky-500 border-sky-500 text-white shadow-md shadow-sky-100' 
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-sky-300'
-                      }`}
-                    >
-                      {dr.name}
-                    </button>
-                  );
-                })}
+            {/* Row 2: Team + Projects side by side */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                  Team Selection
+                  {filters.selectedEmployees.length > 0 && <button onClick={() => handleFilterChange('selectedEmployees', [])} className="text-[10px] text-sky-500 font-bold normal-case hover:text-sky-700 transition-colors">Clear</button>}
+                </label>
+                <select
+                  multiple
+                  value={filters.selectedEmployees}
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.selectedOptions, opt => opt.value);
+                    handleFilterChange('selectedEmployees', selected);
+                  }}
+                  className="w-full px-2 py-1 border border-slate-200 rounded-lg bg-white text-xs font-medium focus:border-sky-400 focus:ring-0 outline-none cursor-pointer h-[72px] shadow-sm"
+                >
+                  {visibleReportees.map((dr) => (
+                    <option key={dr.id} value={dr.id}>{dr.name}</option>
+                  ))}
+                </select>
+                <span className="text-[9px] text-slate-300 font-medium">Hold Ctrl/Cmd to select multiple</span>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                  Projects
+                  {filters.selectedProjects.length > 0 && <button onClick={() => handleFilterChange('selectedProjects', [])} className="text-[10px] text-sky-500 font-bold normal-case hover:text-sky-700 transition-colors">Clear</button>}
+                </label>
+                <select
+                  multiple
+                  value={filters.selectedProjects}
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.selectedOptions, opt => opt.value);
+                    handleFilterChange('selectedProjects', selected);
+                  }}
+                  className="w-full px-2 py-1 border border-slate-200 rounded-lg bg-white text-xs font-medium focus:border-sky-400 focus:ring-0 outline-none cursor-pointer h-[72px] shadow-sm"
+                >
+                  {filteredProjects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {filteredProjects.length === 0 && <span className="text-[10px] text-slate-400 italic">No projects for current view</span>}
+                <span className="text-[9px] text-slate-300 font-medium">Hold Ctrl/Cmd to select multiple</span>
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Projects Selection */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center">
-                Projects
-                {filters.selectedProjects.length > 0 && <button onClick={() => handleFilterChange('selectedProjects', [])} className="text-[10px] text-sky-600 font-bold lowercase hover:underline">Clear Selection</button>}
-              </label>
-              <div className="flex flex-wrap gap-2 p-3 border-2 border-slate-100 rounded-xl bg-slate-50 max-h-32 overflow-y-auto custom-scrollbar">
-                {filteredProjects.map((p) => {
-                  const isSelected = filters.selectedProjects.includes(p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => {
-                        const newSelection = isSelected 
-                          ? filters.selectedProjects.filter(id => id !== p.id)
-                          : [...filters.selectedProjects, p.id];
-                        handleFilterChange('selectedProjects', newSelection);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border-2 ${
-                        isSelected 
-                        ? 'bg-indigo-500 border-indigo-500 text-white shadow-md shadow-indigo-100' 
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  );
-                })}
-                {filteredProjects.length === 0 && <span className="text-xs text-slate-400 italic py-1">No projects found for current team view</span>}
-              </div>
+          {/* Project Distribution — right side of header */}
+          <div className="lg:col-span-1 bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex flex-col">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-bold text-slate-700">Project Distribution</h3>
+              {chartProjectFilter && <button onClick={() => setChartProjectFilter(null)} className="text-[10px] text-sky-600 font-bold uppercase hover:underline">Reset</button>}
+            </div>
+            <div className="flex-1 min-h-0">
+              <PieChart data={projectHours} onSliceClick={setChartProjectFilter} activeId={chartProjectFilter} />
             </div>
           </div>
         </div>
@@ -306,42 +300,33 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
         )}
 
         {dashboardView === 'dashboard' ? (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-bold text-slate-700">Project Distribution</h3>
-                  {chartProjectFilter && <button onClick={() => setChartProjectFilter(null)} className="text-[10px] text-sky-600 font-bold uppercase hover:underline">Reset</button>}
-                </div>
-                <PieChart data={projectHours} onSliceClick={setChartProjectFilter} activeId={chartProjectFilter} />
-              </div>
-              <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-                <h3 className="font-bold text-slate-700 mb-6 font-bold">Team Hour Allocation</h3>
+          <div className="space-y-4">
+            {/* Team Hour Allocation + Activity Overview — same row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                <h3 className="text-sm font-bold text-slate-700 mb-4">Team Hour Allocation</h3>
                 <BarChart data={employeeHours} />
               </div>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-12">
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-bold text-slate-700">Activity Overview</h3>
-                  <div className="px-3 py-1 bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-tighter">by Team</div>
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-bold text-slate-700">Activity Overview</h3>
+                  <div className="px-2 py-0.5 bg-slate-100 rounded-md text-[10px] font-bold text-slate-500 uppercase tracking-tighter">by Team</div>
                 </div>
-                <div className="flex-1">
-                  <ProjectSummaryTable entries={filteredEntries} fullDb={fullDb} />
+                <ProjectSummaryTable entries={filteredEntries} fullDb={fullDb} />
+              </div>
+            </div>
+
+            {/* Log Feed — full width at bottom */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 pb-8">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-sm font-bold text-slate-700">Log Feed</h3>
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                  <div className="w-2 h-2 rounded-full bg-sky-500"></div>
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-bold text-slate-700">Log Feed</h3>
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                    <div className="w-2 h-2 rounded-full bg-sky-500"></div>
-                  </div>
-                </div>
-                <div className="flex-1 max-h-[450px] overflow-y-auto custom-scrollbar">
-                  <TimeEntryList entries={filteredEntries} allUsers={allUsers} fullDb={fullDb} readOnly={true} />
-                </div>
+              <div className="max-h-[500px] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+                <TimeEntryList entries={filteredEntries} allUsers={allUsers} fullDb={fullDb} readOnly={true} />
               </div>
             </div>
           </div>

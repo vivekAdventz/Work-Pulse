@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import api from '../api';
-import { AiWandIcon, PlusIcon, DeleteIcon } from './Icons';
+import api from '../../api';
+import { AiWandIcon, PlusIcon, DeleteIcon } from '../common/Icons';
 
 const STEPS = { PROMPT: 'prompt', REVIEW: 'review', SAVING: 'saving' };
 
