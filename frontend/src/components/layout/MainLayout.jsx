@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import iconUrl from '../../assets/icon.png';
+import iconUrl from '../../assets/briefcase.png';
 
 export default function MainLayout({ user, onLogout, children, activeView = 'dashboard', onNavigate = () => {}, onDownloadCsv = null, onGenerateSummary = null, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -10,10 +10,10 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
       {/* Sidebar */}
       <aside className={`w-64 bg-white border-r border-slate-200 flex flex-col p-6 shrink-0 absolute inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-30`}>
         <div className="flex items-center gap-3 mb-10 px-2">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
-            <img src={iconUrl} alt="Zuari Industries" className="h-15 object-contain" />
+          <div className="w-10 h-10  rounded-xl flex items-center justify-center  shadow-blue-200 shrink-0">
+            <img src={iconUrl} alt="Zuari Industries" className="h-15 shadow-lgobject-contain" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Workpulse</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-blue-900">Workpulse</h1>
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden ml-auto p-1 text-slate-400 hover:text-slate-600 transition-colors">
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
@@ -51,8 +51,8 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg shrink-0">
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
-            <div className="hidden md:flex items-center shrink-0">
-              <img src="https://www.zuariindustries.in/assets/web/img/logo/zuari_logo.png" alt="Zuari Industries" className="h-10 object-contain" />
+            <div className="flex items-center shrink-0">
+              <img src="https://www.zuariindustries.in/assets/web/img/logo/zuari_logo.png" alt="Zuari Industries" className="h-8 md:h-10 object-contain" />
             </div>
             
             {hasBothRoles && onToggleRole && (
@@ -90,14 +90,14 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
             <div className="w-10 h-10 shrink-0 rounded-full bg-blue-100 border-2 border-white shadow-sm flex items-center justify-center overflow-hidden">
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
-            <div className="hidden md:flex items-center shrink-0 ml-2">
-              <img src="https://www.zuariindustries.in/assets/web/img/logo/adventz.png" alt="Adventz" className="h-10 object-contain" />
+            <div className="flex items-center shrink-0 ml-2">
+              <img src="https://www.zuariindustries.in/assets/web/img/logo/adventz.png" alt="Adventz" className="h-8 md:h-10 object-contain" />
             </div>
           </div>
         </header>
 
         {/* Content Area */}
-        <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
+        <div className="p-2 md:p-8 space-y-8 max-w-10xl mx-auto">
           {children}
         </div>
       </main>
