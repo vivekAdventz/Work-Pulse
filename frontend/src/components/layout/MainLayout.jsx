@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import iconUrl from '../../assets/icon.png';
 
 export default function MainLayout({ user, onLogout, children, activeView = 'dashboard', onNavigate = () => {}, onDownloadCsv = null, onGenerateSummary = null, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -10,7 +11,7 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
       <aside className={`w-64 bg-white border-r border-slate-200 flex flex-col p-6 shrink-0 absolute inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-30`}>
         <div className="flex items-center gap-3 mb-10 px-2">
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
-            <img src="../../src/assets/icon.png" alt="Zuari Industries" className="h-15 object-contain" />
+            <img src={iconUrl} alt="Zuari Industries" className="h-15 object-contain" />
           </div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Workpulse</h1>
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden ml-auto p-1 text-slate-400 hover:text-slate-600 transition-colors">
