@@ -52,14 +52,14 @@ export default function AIPlannerModal({ onClose, fullDb, user, teamProjects, te
     [fullDb.subProjects, projectId]
   );
 
-  const wordCount = description.trim().split(/\s+/).filter(Boolean).length;
+  const charCount = description.trim().length;
 
   // ── Step 1: Generate ──
   const handleGenerate = async () => {
     setError('');
     if (!projectId) { setError('Please select a project.'); return; }
-    if (wordCount < 5) { setError('Description too short. Write at least 5 words.'); return; }
-    if (wordCount > 100) { setError('Description too long. Keep under 100 words.'); return; }
+    if (charCount < 100) { setError('Description too short. Write at least 100 characters.'); return; }
+    if (charCount > 1000) { setError('Description too long. Keep under 1000 characters.'); return; }
 
     setIsGenerating(true);
     setStep(1);
@@ -156,9 +156,9 @@ export default function AIPlannerModal({ onClose, fullDb, user, teamProjects, te
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Phase</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Sub-Project</label>
                   <select value={subProjectId} onChange={(e) => setSubProjectId(e.target.value)} disabled={!projectId} className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl text-sm font-medium focus:border-indigo-400 focus:ring-0 outline-none transition-all disabled:bg-slate-50">
-                    <option value="">All Phases</option>
+                    <option value="">All Sub-Projects</option>
                     {availableSubProjects.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
                   </select>
                 </div>
@@ -174,8 +174,8 @@ export default function AIPlannerModal({ onClose, fullDb, user, teamProjects, te
                   className="w-full px-4 py-3 border-2 border-indigo-100 rounded-xl text-sm resize-none focus:border-indigo-400 focus:ring-0 outline-none transition-all"
                 />
                 <div className="flex items-center justify-between mt-2">
-                  <span className={`text-xs font-bold ${wordCount > 100 ? 'text-red-500' : wordCount >= 5 ? 'text-emerald-500' : 'text-slate-400'}`}>
-                    {wordCount}/100 words
+                  <span className={`text-xs font-bold ${charCount > 1000 ? 'text-red-500' : charCount >= 100 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                    {charCount}/1000 characters (min 100)
                   </span>
                 </div>
               </div>
@@ -271,13 +271,13 @@ export default function AIPlannerModal({ onClose, fullDb, user, teamProjects, te
 
                       {/* SubProject */}
                       <div className="mt-2 flex items-center gap-2">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase">Phase:</span>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Sub-Project:</span>
                         <select
                           value={task.subProjectId || ''}
                           onChange={(e) => updateTaskField(idx, 'subProjectId', e.target.value || null)}
                           className="text-[10px] border border-slate-100 rounded-md px-2 py-0.5 outline-none"
                         >
-                          <option value="">Select Phase</option>
+                          <option value="">Select Sub-Project</option>
                           {availableSubProjects.map(sp => (
                             <option key={sp.id} value={sp.id}>{sp.name}</option>
                           ))}

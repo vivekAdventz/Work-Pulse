@@ -314,23 +314,24 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
   return (
     <div className="animate-fadeIn">
       {/* ── Top bar: Add Day + Role Switcher ── */}
-      <div className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 w-full px-2">
         {isManager && !viewingAsUser ? (
-          <>
-          <button onClick={handleAddDay} className="bg-white rounded-xl shadow-md border border-slate-200 p-4 flex items-center justify-between cursor-pointer hover:shadow-lg transition-all group flex-1 max-w-xl">
-            <div className="flex items-center gap-3 text-slate-400">
-              <CalendarSmIcon className="w-5 h-5" />
-              <span className="font-medium group-hover:text-slate-600 tracking-tight">Plan task map for a new date...</span>
-            </div>
-            <PlusIcon className="text-slate-400 group-hover:text-indigo-600 w-6 h-6" />
-          </button>
-          <button
-            onClick={() => setShowPlanner(true)}
-            className="flex items-center gap-2 px-5 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl shadow-lg shadow-indigo-200 hover:shadow-xl hover:-translate-y-0.5 transition-all font-bold text-sm shrink-0"
-          >
-            <SparklesIcon className="w-5 h-5" /> Generate Plan
-          </button>
-          </>
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 flex-1">
+            <button onClick={handleAddDay} className="bg-white rounded-xl shadow-md border border-slate-200 p-4 flex items-center justify-between cursor-pointer hover:shadow-lg transition-all group flex-1 max-w-xl">
+              
+              <div className="flex items-center gap-3 text-slate-400">
+                <CalendarSmIcon className="w-5 h-5" />
+                <span className="font-medium group-hover:text-slate-600 tracking-tight">Plan task map for a new date...</span>
+              </div>
+              <PlusIcon className="text-slate-400 group-hover:text-indigo-600 w-6 h-6" />
+            </button>
+            <button
+              onClick={() => setShowPlanner(true)}
+              className="flex items-center gap-2 px-5 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl shadow-lg shadow-indigo-200 hover:shadow-xl hover:-translate-y-0.5 transition-all font-bold text-sm shrink-0"
+            >
+              <SparklesIcon className="w-5 h-5" /> Generate Plan
+            </button>
+          </div>
         ) : (
           <div className="bg-indigo-600 p-4 rounded-2xl shadow-xl shadow-indigo-100 flex items-center justify-between flex-1 max-w-2xl">
             <div className="flex items-center gap-3 text-white">
