@@ -18,6 +18,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
   const [teamMemberIds, setTeamMemberIds] = useState(initialData?.teamMemberIds || []);
   const [stakeholderIds, setStakeholderIds] = useState(initialData?.stakeholderIds || []);
   const [description, setDescription] = useState(initialData?.description || '');
+  const [syncToCalendar, setSyncToCalendar] = useState(false);
 
   // AI state
   const [isAiActive, setIsAiActive] = useState(false);
@@ -180,6 +181,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       teamMemberIds,
       stakeholderIds,
       description,
+      syncToCalendar,
     });
   };
 
@@ -452,6 +454,45 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
                     dangerouslySetInnerHTML={{ __html: marked.parse(description) }}
                   />
                 )}
+              </div>
+
+              {/* Teams Calendar Sync Toggle */}
+              <div className="md:col-span-2">
+                <div className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                  syncToCalendar ? 'border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50' : 'border-slate-100 bg-gradient-to-r from-slate-50/50 to-white hover:border-slate-200'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shadow-md transition-all ${
+                      syncToCalendar ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-200' : 'bg-slate-300 shadow-slate-200'
+                    }`}>
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-slate-700">Sync to Teams Calendar</span>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {syncToCalendar
+                          ? '✓ Will create a Teams meeting event in your calendar'
+                          : 'Create a calendar event with Teams meeting link'}
+                        {teamMemberIds.length > 0 && syncToCalendar && (
+                          <span className="text-indigo-500 font-medium"> • {teamMemberIds.length} attendee{teamMemberIds.length > 1 ? 's' : ''} will be invited</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSyncToCalendar(!syncToCalendar)}
+                    className={`relative w-12 h-7 rounded-full transition-all duration-300 shadow-inner ${
+                      syncToCalendar ? 'bg-gradient-to-r from-indigo-500 to-purple-600' : 'bg-slate-200'
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${
+                      syncToCalendar ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
               </div>
 
             </div>

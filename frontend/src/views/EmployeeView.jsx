@@ -13,6 +13,7 @@ import AiFillModal from '../components/modals/AiFillModal';
 import Toast, { useToast } from '../components/common/Toast';
 import { PlusIcon, PlayIcon, GridIcon, TableIcon, AiWandIcon } from '../components/common/Icons';
 import TaskKeepView from '../components/taskkeep/TaskKeepView';
+import CalendarView from '../components/calendar/CalendarView';
 
 export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
   const { toasts, showToast, removeToast } = useToast();
@@ -38,15 +39,40 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
 
   const handleSaveEntry = async (entryData) => {
     try {
-      if (entryData.id) {
-        const updatedEntry = await api.updateTimeEntry(entryData.id, entryData);
-        setFullDb((prev) => ({ ...prev, timeEntries: prev.timeEntries.map((e) => (e.id === entryData.id ? updatedEntry : e)) }));
+      // Extract syncToCalendar flag (not persisted in DB)
+      const { syncToCalendar, ...entryPayload } = entryData;
+      let savedEntry;
+
+      if (entryPayload.id) {
+        savedEntry = await api.updateTimeEntry(entryPayload.id, entryPayload);
+        setFullDb((prev) => ({ ...prev, timeEntries: prev.timeEntries.map((e) => (e.id === entryPayload.id ? savedEntry : e)) }));
         showToast('Time entry updated successfully.', 'success');
       } else {
-        const newEntry = await api.addTimeEntry(entryData);
-        setFullDb((prev) => ({ ...prev, timeEntries: [...prev.timeEntries, newEntry] }));
+        savedEntry = await api.addTimeEntry(entryPayload);
+        setFullDb((prev) => ({ ...prev, timeEntries: [...prev.timeEntries, savedEntry] }));
         showToast('Time entry added successfully.', 'success');
       }
+
+      // Create Teams calendar event if toggle was on
+      if (syncToCalendar && savedEntry?.id) {
+        try {
+          const calResult = await api.createCalendarEvent(savedEntry.id);
+          if (calResult?.calendarEvent?.joinUrl) {
+            showToast(
+              `📅 Teams meeting created! Join link copied to clipboard.`,
+              'success'
+            );
+            // Copy join link to clipboard
+            try { await navigator.clipboard.writeText(calResult.calendarEvent.joinUrl); } catch {}
+          } else {
+            showToast('📅 Calendar event created in Teams!', 'success');
+          }
+        } catch (calError) {
+          console.error('Calendar sync failed:', calError);
+          showToast(`Time entry saved, but calendar sync failed: ${calError.message}`, 'warning');
+        }
+      }
+
       // If this came from TaskKeep done flow, finalize the done status
       if (formInitialData?._taskKeepDayId && formInitialData?._taskKeepTaskId) {
         try {
@@ -439,6 +465,11 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
             setFormInitialData(prefill);
             setIsFormOpen(true);
           }}
+        />
+      ) : activeView === 'calendar' ? (
+        <CalendarView
+          user={user}
+          showToast={showToast}
         />
       ) : (
         <div className="space-y-5">

@@ -39,10 +39,15 @@ const msalConfig = {
 };
 
 const loginRequest = {
-  scopes: ['User.Read'],
+  scopes: ['User.Read', 'Calendars.ReadWrite'],
+};
+
+// Separate scope request for calendar operations (used when acquiring tokens silently)
+const calendarRequest = {
+  scopes: ['Calendars.ReadWrite'],
 };
 
 const msalInstance = new PublicClientApplication(msalConfig);
 msalInstance.setNavigationClient(new CapacitorNavigationClient());
 
-export { msalInstance, loginRequest };
+export { msalInstance, loginRequest, calendarRequest };

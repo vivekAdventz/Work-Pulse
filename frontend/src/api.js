@@ -21,13 +21,43 @@ function getAuthHeaders() {
   return headers;
 }
 
+/**
+ * Acquire a Microsoft Graph access token for calendar operations.
+ * Uses MSAL silent token acquisition first, falls back to popup.
+ * Returns the token string, or null if not available.
+ */
+async function getMsGraphToken() {
+  try {
+    const { msalInstance, calendarRequest } = await import('./msalConfig');
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) return null;
+
+    try {
+      // Try silent acquisition first
+      const response = await msalInstance.acquireTokenSilent({
+        ...calendarRequest,
+        account: accounts[0],
+      });
+      return response.accessToken;
+    } catch (silentError) {
+      // If silent fails, try popup
+      console.warn('Silent token acquisition failed, trying popup:', silentError);
+      const response = await msalInstance.acquireTokenPopup(calendarRequest);
+      return response.accessToken;
+    }
+  } catch (error) {
+    console.error('Failed to acquire MS Graph token:', error);
+    return null;
+  }
+}
+
 const AUTH_ENDPOINTS = ['/auth/', '/login'];
 
 const api = {
-  async request(endpoint, method = 'GET', body = null, responseType = 'json') {
+  async request(endpoint, method = 'GET', body = null, responseType = 'json', extraHeaders = {}) {
     const options = {
       method,
-      headers: getAuthHeaders(),
+      headers: { ...getAuthHeaders(), ...extraHeaders },
     };
     if (body) {
       options.body = JSON.stringify(body);
@@ -91,6 +121,53 @@ const api = {
   moveTask: (dayId, taskId, targetDate) => api.request(`/taskKeep/${dayId}/tasks/${taskId}/move`, 'POST', { targetDate }),
   generatePlan: (data) => api.request('/taskKeep/generate-plan', 'POST', data),
   executePlan: (data) => api.request('/taskKeep/execute-plan', 'POST', data),
+
+  // Calendar / Teams Meeting endpoints
+  /**
+   * Create a calendar event linked to a time entry.
+   * Automatically acquires MS Graph token and passes it to the backend.
+   */
+  createCalendarEvent: async (timeEntryId) => {
+    const msToken = await getMsGraphToken();
+    if (!msToken) {
+      throw new Error('Could not acquire Microsoft token. Please sign in with Microsoft to use calendar features.');
+    }
+    return api.request('/calendar', 'POST', { timeEntryId }, 'json', {
+      'x-ms-token': msToken,
+    });
+  },
+
+  /**
+   * List calendar events from user's Microsoft calendar.
+   */
+  getCalendarEvents: async () => {
+    const msToken = await getMsGraphToken();
+    if (!msToken) {
+      throw new Error('Could not acquire Microsoft token.');
+    }
+    return api.request('/calendar', 'GET', null, 'json', {
+      'x-ms-token': msToken,
+    });
+  },
+
+  /**
+   * Get the calendar event linked to a specific time entry.
+   */
+  getLinkedCalendarEvent: (timeEntryId) => api.request(`/calendar/linked/${timeEntryId}`),
+
+  /**
+   * Delete a calendar event by Graph event ID.
+   */
+  deleteCalendarEvent: async (graphEventId) => {
+    const msToken = await getMsGraphToken();
+    if (!msToken) {
+      throw new Error('Could not acquire Microsoft token.');
+    }
+    return api.request(`/calendar/${graphEventId}`, 'DELETE', null, 'json', {
+      'x-ms-token': msToken,
+    });
+  },
 };
 
 export default api;
+
