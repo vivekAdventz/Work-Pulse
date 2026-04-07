@@ -86,9 +86,10 @@ export const addTask = async (req, res) => {
   const day = await TaskDay.findById(req.params.dayId);
   if (!day) return res.status(404).json({ error: 'Day not found' });
 
-  const { title, assigneeId, projectId, status } = req.body;
+  const { title, description, assigneeId, projectId, status } = req.body;
   const task = {
-    title: title || '',
+    title: String(title || ''),
+    description: String(description || ''),
     assigneeId: assigneeId || null,
     projectId: projectId || null,
     status: status || 'todo',
@@ -96,6 +97,7 @@ export const addTask = async (req, res) => {
   };
 
   day.tasks.push(task);
+  day.markModified('tasks');
   await day.save();
   res.status(201).json(day);
 };
@@ -135,14 +137,16 @@ export const updateTask = async (req, res) => {
     return res.status(400).json({ error: 'Please select a project before assigning the task' });
   }
 
-  const { title, assigneeId, projectId, subProjectId, status, dependsOn } = req.body;
-  if (title !== undefined) task.title = title;
+  const { title, description, assigneeId, projectId, subProjectId, status, dependsOn } = req.body;
+  if (title !== undefined) task.title = String(title);
+  if (description !== undefined) task.description = String(description);
   if (assigneeId !== undefined) task.assigneeId = assigneeId;
   if (projectId !== undefined) task.projectId = projectId;
   if (subProjectId !== undefined) task.subProjectId = subProjectId;
   if (status !== undefined) task.status = status;
   if (dependsOn !== undefined) task.dependsOn = dependsOn;
 
+  day.markModified('tasks');
   await day.save();
   res.json(day);
 };
@@ -253,7 +257,8 @@ export const executePlan = async (req, res) => {
     for (const task of tasksByDate[date]) {
       const dependsOnId = task.dependsOn ? (taskNumberToId[task.dependsOn] || null) : null;
       day.tasks.push({
-        title: task.title,
+        title: String(task.title || ''),
+        description: String(task.description || ''),
         assigneeId: task.assigneeId || null,
         projectId: projectId || null,
         subProjectId: task.subProjectId || null,
@@ -267,6 +272,7 @@ export const executePlan = async (req, res) => {
       taskNumberToId[task.taskNumber] = newTask._id;
     }
 
+    day.markModified('tasks');
     await day.save();
     createdDays.push(day);
   }

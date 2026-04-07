@@ -159,7 +159,7 @@ ${JSON.stringify(simplified, null, 2)}`;
     model: 'gemini-2.5-flash',
     contents: prompt,
   });
-  
+
   return response.text;
 }
 
@@ -187,7 +187,7 @@ ${promptMessage}
     model: 'gemini-2.5-flash',
     contents: systemPrompt,
   });
-  
+
   return response.text;
 }
 
