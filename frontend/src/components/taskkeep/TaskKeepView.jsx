@@ -58,6 +58,9 @@ const UserCircleIcon = ({ className }) => (
 const FileTextIcon = ({ className }) => (
   <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
 );
+const LinkIcon = ({ className }) => (
+  <svg className={className} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+);
 
 const STATUS_ICONS = { todo: CircleIcon, doing: PlayCircleIcon, done: CheckCircleIcon };
 
@@ -598,6 +601,49 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                             <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[8px] font-bold uppercase ${depDone ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`} title={depDone ? `✅ "${depTask.title}" is done` : `🚫 Blocked — "${depTask.title}" not done yet`}>
                               {depDone ? '✅' : '🔒'} {depTask.title?.substring(0, 20) || 'Task'}
                             </span>
+                          )}
+
+                          {/* Dependency linker (manager or task owner) */}
+                          {canEditTask && (
+                            <HoverDropdown align="right" width="w-52" trigger={
+                              <button className={`flex items-center gap-1 hover:bg-black/5 px-2 py-0.5 rounded-md border border-dashed border-slate-200 ${task.dependsOn ? 'border-amber-200' : ''}`}>
+                                <LinkIcon className={task.dependsOn ? 'text-amber-500' : 'text-slate-300'} />
+                                <span className={`text-[9px] font-bold uppercase ${task.dependsOn ? 'text-amber-600' : 'text-slate-300'}`}>
+                                  {task.dependsOn ? 'Linked' : 'Link'}
+                                </span>
+                              </button>
+                            }>
+                              <p className="text-[9px] font-bold text-slate-400 mb-1.5 uppercase px-1">Depends On</p>
+                              {task.dependsOn && (
+                                <button
+                                  onClick={() => handleUpdateTask(day.id, task.id, 'dependsOn', null)}
+                                  className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-red-50 rounded-lg font-medium text-red-500 mb-1 border-b border-slate-50 pb-2"
+                                >
+                                  ✕ Remove Link
+                                </button>
+                              )}
+                              <div className="max-h-40 overflow-y-auto pr-1">
+                                {/* Show tasks from same day + earlier days that are not this task */}
+                                {days
+                                  .filter(d => d.date <= day.date)
+                                  .flatMap(d => d.tasks.map(t => ({ ...t, dayDate: d.date, dayId: d.id })))
+                                  .filter(t => t.id !== task.id)
+                                  .map(t => (
+                                    <button
+                                      key={t.id}
+                                      onClick={() => handleUpdateTask(day.id, task.id, 'dependsOn', t.id)}
+                                      className={`w-full text-left px-2 py-1.5 text-[10px] hover:bg-amber-50 rounded-lg flex items-center justify-between gap-1 ${task.dependsOn === t.id ? 'bg-amber-50' : ''}`}
+                                    >
+                                      <span className="font-medium text-slate-600 truncate">{t.title || 'Untitled'}</span>
+                                      <span className="text-[8px] text-slate-400 shrink-0">{t.dayDate === day.date ? 'today' : t.dayDate.slice(5)}</span>
+                                      {task.dependsOn === t.id && <CheckIcon className="text-amber-500 shrink-0" />}
+                                    </button>
+                                  ))}
+                                {days.filter(d => d.date <= day.date).flatMap(d => d.tasks).filter(t => t.id !== task.id).length === 0 && (
+                                  <p className="text-[10px] text-slate-400 italic px-2 py-2">No other tasks available</p>
+                                )}
+                              </div>
+                            </HoverDropdown>
                           )}
 
                           {/* Assignee picker (manager only, requires project) */}
