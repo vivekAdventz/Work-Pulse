@@ -53,52 +53,95 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto relative [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
         {/* Header */}
-        <header className="glass-header bg-white sticky top-0 z-10 px-4 md:px-8 py-4 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-4 md:gap-8">
-            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg shrink-0">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+        <header className="glass-header bg-white sticky top-0 z-10 px-3 md:px-8 py-3 md:py-4 border-b border-slate-200">
+          <div className="flex items-center gap-2 md:gap-4 min-w-0">
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="md:hidden p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg shrink-0"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
+
+            {/* Logo */}
             <div className="flex items-center shrink-0">
-              <img src="https://www.zuariindustries.in/assets/web/img/logo/zuari_logo.png" alt="Zuari Industries" className="h-8 md:h-10 object-contain" />
+              <img
+                src="https://www.zuariindustries.in/assets/web/img/logo/zuari_logo.png"
+                alt="Zuari Industries"
+                className="h-7 md:h-10 object-contain"
+              />
             </div>
-            
+
+            {/* Role toggle */}
             {hasBothRoles && onToggleRole && (
-              <div className="flex bg-slate-100 p-1 rounded-lg shrink-0 overflow-x-auto max-w-[200px] md:max-w-none">
+              <div className="flex bg-slate-100 p-0.5 md:p-1 rounded-lg shrink-0">
                 <button
                   onClick={() => onToggleRole('Employee')}
-                  className={`px-3 md:px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeRole === 'Employee' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-2 md:px-4 py-1 md:py-1.5 text-xs md:text-sm font-semibold rounded-md transition-all ${activeRole === 'Employee' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
                 >Employee</button>
                 <button
                   onClick={() => onToggleRole('Manager')}
-                  className={`px-3 md:px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeRole === 'Manager' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-2 md:px-4 py-1 md:py-1.5 text-xs md:text-sm font-semibold rounded-md transition-all ${activeRole === 'Manager' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
                 >Manager</button>
               </div>
             )}
-          </div>
 
-          <div className="flex items-center gap-2 md:gap-4 ml-auto">
-            {onGenerateSummary && (
-              <button onClick={onGenerateSummary} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-2 md:px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-md shadow-indigo-100 shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-                <span className="hidden lg:inline">AI Summary</span>
-              </button>
-            )}
-            {onDownloadCsv && (
-              <button onClick={onDownloadCsv} className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 px-2 md:px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                <span className="hidden lg:inline">CSV Export</span>
-              </button>
-            )}
-            <div className="hidden sm:block h-8 w-[1px] bg-slate-200 mx-1 md:mx-2 shrink-0"></div>
-            <div className="hidden sm:block text-right shrink-0">
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Welcome,</p>
-              <p className="text-sm font-bold text-slate-800">{user.name.split(' ')[0]} <span className="text-slate-400 font-normal">({(activeRole || user.roles?.[0])?.toUpperCase()})</span></p>
-            </div>
-            <div className="w-10 h-10 shrink-0 rounded-full bg-blue-100 border-2 border-white shadow-sm flex items-center justify-center overflow-hidden">
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            </div>
-            <div className="flex items-center shrink-0 ml-2">
-              <img src="https://www.zuariindustries.in/assets/web/img/logo/adventz.png" alt="Adventz" className="h-8 md:h-10 object-contain" />
+            {/* Spacer */}
+            <div className="flex-1 min-w-0" />
+
+            {/* Right-side actions */}
+            <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
+              {onGenerateSummary && (
+                <button
+                  onClick={onGenerateSummary}
+                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white p-2 md:px-4 md:py-2 rounded-lg text-sm font-medium transition-all shadow-md shadow-indigo-100"
+                  title="AI Summary"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                  <span className="hidden lg:inline">AI Summary</span>
+                </button>
+              )}
+
+              {onDownloadCsv && (
+                <button
+                  onClick={onDownloadCsv}
+                  className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 p-2 md:px-4 md:py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+                  title="CSV Export"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                  <span className="hidden lg:inline">CSV Export</span>
+                </button>
+              )}
+
+              {/* Divider + user info — desktop only */}
+              <div className="hidden sm:flex items-center gap-2 md:gap-3 pl-1 md:pl-2 border-l border-slate-200 ml-1">
+                <div className="text-right hidden md:block">
+                  <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Welcome,</p>
+                  <p className="text-sm font-bold text-slate-800 leading-tight">
+                    {user.name.split(' ')[0]}{' '}
+                    <span className="text-slate-400 font-normal">({(activeRole || user.roles?.[0])?.toUpperCase()})</span>
+                  </p>
+                </div>
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-100 border-2 border-white shadow-sm flex items-center justify-center overflow-hidden shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+              </div>
+
+              {/* User avatar — mobile only (no divider) */}
+              <div className="sm:hidden w-8 h-8 rounded-full bg-blue-100 border-2 border-white shadow-sm flex items-center justify-center overflow-hidden shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+
+              {/* Adventz logo — hidden on mobile */}
+              <div className="hidden md:flex items-center shrink-0">
+                <img
+                  src="https://www.zuariindustries.in/assets/web/img/logo/adventz.png"
+                  alt="Adventz"
+                  className="h-10 object-contain"
+                />
+              </div>
             </div>
           </div>
         </header>
