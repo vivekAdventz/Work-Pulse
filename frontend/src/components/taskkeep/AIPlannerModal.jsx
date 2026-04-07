@@ -58,7 +58,7 @@ export default function AIPlannerModal({ onClose, fullDb, user, teamProjects, te
   const handleGenerate = async () => {
     setError('');
     if (!projectId) { setError('Please select a project.'); return; }
-    if (charCount < 100) { setError('Description too short. Write at least 100 characters.'); return; }
+    if (charCount < 200) { setError('Description too short. Write at least 200 characters.'); return; }
     if (charCount > 1000) { setError('Description too long. Keep under 1000 characters.'); return; }
 
     setIsGenerating(true);
@@ -173,10 +173,18 @@ export default function AIPlannerModal({ onClose, fullDb, user, teamProjects, te
                   placeholder="Describe activity... (e.g., Finalize Q2 audit over 3 days. AI ensures review tasks are scheduled after drafts)"
                   className="w-full px-4 py-3 border-2 border-indigo-100 rounded-xl text-sm resize-none focus:border-indigo-400 focus:ring-0 outline-none transition-all"
                 />
-                <div className="flex items-center justify-between mt-2">
-                  <span className={`text-xs font-bold ${charCount > 1000 ? 'text-red-500' : charCount >= 100 ? 'text-emerald-500' : 'text-slate-400'}`}>
-                    {charCount}/1000 characters (min 100)
-                  </span>
+                <div className="flex flex-col gap-1 mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-bold ${charCount > 1000 ? 'text-red-500' : charCount >= 200 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                      {charCount}/1000 characters (min 200)
+                    </span>
+                  </div>
+                  {error && error.includes('short') && (
+                    <p className="text-xs text-red-500 font-bold animate-fadeIn flex items-center gap-1.5 mt-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-sm" />
+                      Description too short. Write at least 200 characters.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -306,7 +314,7 @@ export default function AIPlannerModal({ onClose, fullDb, user, teamProjects, te
           </div>
 
           <div className="flex items-center gap-3">
-            {error && <span className="text-xs text-red-500 font-medium max-w-[200px] truncate">{error}</span>}
+            {error && !error.includes('short') && <span className="text-xs text-red-500 font-medium max-w-[200px] truncate">{error}</span>}
 
             {step === 2 && (
               <button onClick={() => setStep(0)} className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">
