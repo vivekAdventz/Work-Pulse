@@ -11,3 +11,7 @@ export const PORT         = process.env.PORT || '5000';
 // MS Auth (optional — only used for SSO validation on backend)
 export const MS_CLIENT_ID = process.env.MS_CLIENT_ID || '';
 export const MS_TENANT_ID = process.env.MS_TENANT_ID || '';
+
+export const SMTP_USER = process.env.SMTP_USER || '';
+export const SMTP_PASS = process.env.SMTP_PASS || '';   
+

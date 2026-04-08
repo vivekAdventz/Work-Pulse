@@ -61,6 +61,10 @@ const api = {
   microsoftLogin: (msAccessToken) => api.request('/auth/microsoft', 'POST', { msAccessToken }),
   superadminLogin: (email, password) => api.request('/auth/superadmin-login', 'POST', { email, password }),
   manualLogin: (email, password) => api.request('/auth/manual-login', 'POST', { email, password }),
+  verifyOtp: (email, otp) => api.request('/auth/verify-otp', 'POST', { email, otp }),
+  setPassword: (email, otp, newPassword) => api.request('/auth/set-password', 'POST', { email, otp, newPassword }),
+  resendOtp: (email, password) => api.request('/auth/resend-otp', 'POST', { email, password }),
+  forgotPassword: (email) => api.request('/auth/forgot-password', 'POST', { email }),
   login: (email) => api.request('/login', 'POST', { email }),
 
   // Data endpoints

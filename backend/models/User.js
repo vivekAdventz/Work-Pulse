@@ -6,7 +6,9 @@ const userSchema = new mongoose.Schema({
   roles: [{ type: String, enum: ['Superadmin', 'Manager', 'Employee'] }],
   password: { type: String, select: false },
   active: { type: Boolean, default: true },
-  reportsTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
+  reportsTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  otp: { type: String, select: false },
+  otpExpiresAt: { type: Date, select: false }
 });
 
 export default mongoose.model('User', userSchema);
