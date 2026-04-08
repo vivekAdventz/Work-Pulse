@@ -1,7 +1,19 @@
 import TimeEntry from '../models/TimeEntry.js';
 
+import { getTeamUserIds } from '../services/teamService.js';
+
 export const getAll = async (req, res) => {
-  const entries = await TimeEntry.find();
+  if (req.user.roles && req.user.roles.includes('Superadmin')) {
+    const entries = await TimeEntry.find();
+    return res.json(entries);
+  }
+  const teamIds = await getTeamUserIds(req.user.userId);
+  const entries = await TimeEntry.find({
+    $or: [
+      { userId: { $in: teamIds } },
+      { teamMemberIds: { $in: teamIds } }
+    ]
+  });
   res.json(entries);
 };
 

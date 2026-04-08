@@ -6,18 +6,31 @@ import Project from '../models/Project.js';
 import SubProject from '../models/SubProject.js';
 import ActivityType from '../models/ActivityType.js';
 import TeamMember from '../models/TeamMember.js';
+import { getTeamUserIds } from '../services/teamService.js';
 
 export const getAllData = async (req, res) => {
+  const isSuperadmin = req.user.roles && req.user.roles.includes('Superadmin');
+  const teamIds = isSuperadmin ? null : await getTeamUserIds(req.user.userId);
+  
+  const scopeFilter = isSuperadmin ? {} : { createdBy: { $in: teamIds } };
+  const userFilter = isSuperadmin ? {} : { _id: { $in: teamIds } };
+  const timeEntryFilter = isSuperadmin ? {} : {
+    $or: [
+      { userId: { $in: teamIds } },
+      { teamMemberIds: { $in: teamIds } }
+    ]
+  };
+
   const [users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers] =
     await Promise.all([
-      User.find(),
-      TimeEntry.find(),
-      Company.find(),
-      Stakeholder.find(),
-      Project.find(),
-      SubProject.find(),
-      ActivityType.find(),
-      TeamMember.find(),
+      User.find(userFilter),
+      TimeEntry.find(timeEntryFilter),
+      Company.find(scopeFilter),
+      Stakeholder.find(scopeFilter),
+      Project.find(scopeFilter),
+      SubProject.find(scopeFilter),
+      ActivityType.find(), // ActivityTypes are global
+      TeamMember.find(scopeFilter),
     ]);
 
   res.json({ users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers });

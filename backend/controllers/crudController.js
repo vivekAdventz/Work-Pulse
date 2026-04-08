@@ -2,8 +2,9 @@
  * Creates a standard CRUD router for any Mongoose model.
  * Keeps route logic minimal — just delegates to Mongoose.
  */
-export const getAll = (Model) => async (req, res) => {
-  const items = await Model.find();
+export const getAll = (Model, filterFn) => async (req, res) => {
+  const query = filterFn ? await filterFn(req) : {};
+  const items = await Model.find(query);
   res.json(items);
 };
 

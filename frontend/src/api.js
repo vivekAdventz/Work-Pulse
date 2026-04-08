@@ -64,7 +64,29 @@ const api = {
   login: (email) => api.request('/login', 'POST', { email }),
 
   // Data endpoints
-  getAllData: () => api.request('/all-data'),
+  getUsers: () => api.request('/users'),
+  getTimeEntries: () => api.request('/timeEntries'),
+  getCompanies: () => api.request('/companies'),
+  getStakeholders: () => api.request('/stakeholders'),
+  getProjects: () => api.request('/projects'),
+  getSubProjects: () => api.request('/subProjects'),
+  getActivityTypes: () => api.request('/activityTypes'),
+  getTeamMembers: () => api.request('/teamMembers'),
+  
+  getAllData: async () => {
+    const [users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers] = await Promise.all([
+      api.getUsers(),
+      api.getTimeEntries(),
+      api.getCompanies(),
+      api.getStakeholders(),
+      api.getProjects(),
+      api.getSubProjects(),
+      api.getActivityTypes(),
+      api.getTeamMembers(),
+    ]);
+    return { users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers };
+  },
+
   generateSummary: (timeEntries, fullDb, reportType = 'employee') => api.request('/generate-summary', 'POST', { timeEntries, fullDb, reportType }),
   generateDescription: (prompt) => api.request('/generate-description', 'POST', { prompt }),
   downloadCsv: (entries) => api.request('/download-csv', 'POST', { entries }, 'blob'),

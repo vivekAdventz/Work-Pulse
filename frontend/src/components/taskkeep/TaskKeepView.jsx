@@ -464,7 +464,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
               <div className="space-y-5 flex-1">
                 {day.tasks.map(task => {
                   const assignee = fullDb.users.find(u => u.id === task.assigneeId);
-                  const project = teamProjects.find(p => p.id === task.projectId);
+                  const project = fullDb.projects.find(p => p.id === task.projectId);
                   const subProject = fullDb.subProjects?.find(sp => sp.id === task.subProjectId);
                   const depTask = task.dependsOn
                     ? (day.tasks.find(t => t.id === task.dependsOn) || days.flatMap(d => d.tasks).find(t => t.id === task.dependsOn) || null)

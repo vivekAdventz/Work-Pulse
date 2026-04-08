@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import api from '../api';
 import MainLayout from '../components/layout/MainLayout';
 import TimeEntryList from '../components/timeentry/TimeEntryList';
@@ -14,13 +14,28 @@ import Toast, { useToast } from '../components/common/Toast';
 import { PlusIcon, PlayIcon, GridIcon, TableIcon, AiWandIcon } from '../components/common/Icons';
 import TaskKeepView from '../components/taskkeep/TaskKeepView';
 
-export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
+export default function EmployeeView({ user, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
   const { toasts, showToast, removeToast } = useToast();
+  
+  // Local Data States
+  const [users, setUsers] = useState([]);
+  const [timeEntries, setTimeEntries] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [stakeholders, setStakeholders] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [subProjects, setSubProjects] = useState([]);
+  const [activityTypes, setActivityTypes] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+
+  // UI States
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [timerStartTime, setTimerStartTime] = useState(null);
   const [activeView, setActiveView] = useState('dashboard');
   const [dashboardViewMode, setDashboardViewMode] = useState('table');
+  
+  // Filter States
   const [dateFilter, setDateFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
@@ -28,11 +43,35 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   const [activityFilter, setActivityFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  
   const [formInitialData, setFormInitialData] = useState(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isAiFillOpen, setIsAiFillOpen] = useState(false);
+
+  const loadData = useCallback(async () => {
+    setIsDataLoading(true);
+    try {
+      const db = await api.getAllData();
+      setUsers(db.users || []);
+      setTimeEntries(db.timeEntries || []);
+      setCompanies(db.companies || []);
+      setStakeholders(db.stakeholders || []);
+      setProjects(db.projects || []);
+      setSubProjects(db.subProjects || []);
+      setActivityTypes(db.activityTypes || []);
+      setTeamMembers(db.teamMembers || []);
+    } catch (err) {
+      showToast('Failed to load data from secure APIs.', 'error');
+    } finally {
+      setIsDataLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const getCurrentTime = () => new Date().toTimeString().slice(0, 8);
 
@@ -40,11 +79,11 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     try {
       if (entryData.id) {
         const updatedEntry = await api.updateTimeEntry(entryData.id, entryData);
-        setFullDb((prev) => ({ ...prev, timeEntries: prev.timeEntries.map((e) => (e.id === entryData.id ? updatedEntry : e)) }));
+        setTimeEntries((prev) => prev.map((e) => (e.id === entryData.id ? updatedEntry : e)));
         showToast('Time entry updated successfully.', 'success');
       } else {
         const newEntry = await api.addTimeEntry(entryData);
-        setFullDb((prev) => ({ ...prev, timeEntries: [...prev.timeEntries, newEntry] }));
+        setTimeEntries((prev) => [...prev, newEntry]);
         showToast('Time entry added successfully.', 'success');
       }
       // If this came from TaskKeep done flow, finalize the done status
@@ -66,16 +105,14 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
       try {
         await api.deleteTimeEntry(id);
         // Check if this entry has team members - if so, mark as deleted for current user (soft delete)
-        const entry = fullDb.timeEntries.find((e) => e.id === id);
+        const entry = timeEntries.find((e) => e.id === id);
         if (entry && Array.isArray(entry.teamMemberIds) && entry.teamMemberIds.length > 0) {
-          setFullDb((prev) => ({
-            ...prev,
-            timeEntries: prev.timeEntries.map((e) =>
+          setTimeEntries((prev) => prev.map((e) =>
               e.id === id ? { ...e, deletedFor: [...(e.deletedFor || []), user.id] } : e
-            ),
-          }));
+            )
+          );
         } else {
-          setFullDb((prev) => ({ ...prev, timeEntries: prev.timeEntries.filter((e) => e.id !== id) }));
+          setTimeEntries((prev) => prev.filter((e) => e.id !== id));
         }
         showToast('Time entry deleted.', 'info');
       } catch (error) {
@@ -104,7 +141,11 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   const handleAddItem = (key, createdBy) => async (name) => {
     try {
       const newItem = await api.addItem(key, { name, createdBy });
-      setFullDb((prev) => ({ ...prev, [key]: [...prev[key], newItem] }));
+      if (key === 'companies') setCompanies(p => [...p, newItem]);
+      else if (key === 'stakeholders') setStakeholders(p => [...p, newItem]);
+      else if (key === 'projects') setProjects(p => [...p, newItem]);
+      else if (key === 'subProjects') setSubProjects(p => [...p, newItem]);
+      else if (key === 'teamMembers') setTeamMembers(p => [...p, newItem]);
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} added successfully.`, 'success');
     } catch (error) {
       showToast(`Failed to add item: ${error.message}`, 'error');
@@ -112,11 +153,18 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   };
 
   const handleDeleteItem = (key) => async (id) => {
-    const item = fullDb[key].find(i => i.id === id);
+    let list = [];
+    if (key === 'companies') list = companies;
+    else if (key === 'stakeholders') list = stakeholders;
+    else if (key === 'projects') list = projects;
+    else if (key === 'subProjects') list = subProjects;
+    else if (key === 'teamMembers') list = teamMembers;
+
+    const item = list.find(i => i.id === id);
     if (!item) return;
 
     const isOwner = item.createdBy === user.id;
-    const isManagerOfCreator = fullDb.users.find(u => u.id === item.createdBy)?.reportsTo === user.id;
+    const isManagerOfCreator = users.find(u => u.id === item.createdBy)?.reportsTo === user.id;
 
     if (!isOwner && !isManagerOfCreator) {
       showToast(`You do not have permission to delete this ${key.slice(0, -1)}. Only the owner or their manager can delete it.`, 'warning');
@@ -125,7 +173,11 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
 
     try {
       await api.deleteItem(key, id);
-      setFullDb((prev) => ({ ...prev, [key]: prev[key].filter((item) => item.id !== id) }));
+      if (key === 'companies') setCompanies(p => p.filter(i => i.id !== id));
+      else if (key === 'stakeholders') setStakeholders(p => p.filter(i => i.id !== id));
+      else if (key === 'projects') setProjects(p => p.filter(i => i.id !== id));
+      else if (key === 'subProjects') setSubProjects(p => p.filter(i => i.id !== id));
+      else if (key === 'teamMembers') setTeamMembers(p => p.filter(i => i.id !== id));
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} deleted.`, 'info');
     } catch (error) {
       showToast(`Failed to delete item: ${error.message}`, 'error');
@@ -135,7 +187,9 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   const handleUpdateItem = (key) => async (id, newName) => {
     try {
       const updatedItem = await api.updateItem(key, id, { name: newName });
-      setFullDb((prev) => ({ ...prev, [key]: prev[key].map((item) => (item.id === id ? updatedItem : item)) }));
+      if (key === 'companies') setCompanies(p => p.map(i => i.id === id ? updatedItem : i));
+      else if (key === 'stakeholders') setStakeholders(p => p.map(i => i.id === id ? updatedItem : i));
+      else if (key === 'teamMembers') setTeamMembers(p => p.map(i => i.id === id ? updatedItem : i));
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} updated successfully.`, 'success');
     } catch (error) {
       showToast(`Failed to update item: ${error.message}`, 'error');
@@ -145,7 +199,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   const handleUpdateProject = async (id, projectData) => {
     try {
       const updatedProject = await api.updateItem('projects', id, projectData);
-      setFullDb((prev) => ({ ...prev, projects: prev.projects.map((p) => (p.id === id ? updatedProject : p)) }));
+      setProjects((prev) => prev.map((p) => (p.id === id ? updatedProject : p)));
       showToast('Project updated successfully.', 'success');
     } catch (error) {
       showToast(`Failed to update project: ${error.message}`, 'error');
@@ -155,7 +209,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   const handleAddProject = async (name, companyIds, purpose) => {
     try {
       const newProject = await api.addItem('projects', { name, companyIds, purpose, createdBy: user.id });
-      setFullDb((prev) => ({ ...prev, projects: [...prev.projects, newProject] }));
+      setProjects((prev) => [...prev, newProject]);
       showToast('Project added successfully.', 'success');
     } catch (error) {
       showToast(`Failed to add project: ${error.message}`, 'error');
@@ -165,7 +219,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   const handleAddSubProject = async (name, projectId) => {
     try {
       const newSubProject = await api.addItem('subProjects', { name, projectId, createdBy: user.id });
-      setFullDb((prev) => ({ ...prev, subProjects: [...prev.subProjects, newSubProject] }));
+      setSubProjects((prev) => [...prev, newSubProject]);
       showToast('Sub-project added successfully.', 'success');
     } catch (error) {
       showToast(`Failed to add sub-project: ${error.message}`, 'error');
@@ -173,7 +227,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
   };
 
   const userTimeEntries = useMemo(() => {
-    let entries = fullDb.timeEntries.filter(
+    let entries = timeEntries.filter(
       (e) => {
         const isOwner = e.userId === user.id;
         const isTeamMember = Array.isArray(e.teamMemberIds) && e.teamMemberIds.includes(user.id);
@@ -184,11 +238,11 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     if (dateFilter) entries = entries.filter((e) => e.date === dateFilter);
     if (projectFilter) entries = entries.filter((e) => e.projectId === projectFilter);
     if (companyFilter) {
-      const companyProjectIds = fullDb.projects.filter((p) => p.companyId === companyFilter).map((p) => p.id);
+      const companyProjectIds = projects.filter((p) => p.companyId === companyFilter).map((p) => p.id);
       entries = entries.filter((e) => companyProjectIds.includes(e.projectId));
     }
     if (stakeholderFilter) {
-      const stakeholderProjectIds = fullDb.projects.filter((p) => p.stakeholderId === stakeholderFilter).map((p) => p.id);
+      const stakeholderProjectIds = projects.filter((p) => p.stakeholderId === stakeholderFilter).map((p) => p.id);
       entries = entries.filter((e) => stakeholderProjectIds.includes(e.projectId));
     }
     if (activityFilter) entries = entries.filter((e) => e.activityTypeId === activityFilter);
@@ -198,36 +252,27 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
       entries = entries.filter((e) => e.description?.toLowerCase().includes(q));
     }
     return entries.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
-  }, [fullDb.timeEntries, fullDb.projects, user.id, dateFilter, projectFilter, companyFilter, stakeholderFilter, activityFilter, priorityFilter, searchQuery]);
+  }, [timeEntries, projects, user.id, dateFilter, projectFilter, companyFilter, stakeholderFilter, activityFilter, priorityFilter, searchQuery]);
 
-  const teamUserIds = useMemo(() => {
-    // Current user's manager ID (the head of the team)
-    const managerId = user.reportsTo || user.id;
-    // Everyone reporting to that same manager
-    const siblings = fullDb.users.filter(u => u.reportsTo === managerId || u.id === managerId);
-    // Plus anyone who reports DIRECTLY to the current user (if current user is a manager)
-    const directReports = fullDb.users.filter(u => u.reportsTo === user.id);
-
-    const ids = new Set([user.id, managerId, ...siblings.map(u => u.id), ...directReports.map(u => u.id)]);
-    return Array.from(ids);
-  }, [fullDb.users, user.id, user.reportsTo]);
-
-  const userCompanies = useMemo(() => fullDb.companies.filter((i) => teamUserIds.includes(i.createdBy)), [fullDb.companies, teamUserIds]);
-  const userStakeholders = useMemo(() => fullDb.stakeholders.filter((i) => teamUserIds.includes(i.createdBy)), [fullDb.stakeholders, teamUserIds]);
-  const userProjects = useMemo(() => fullDb.projects.filter((i) => teamUserIds.includes(i.createdBy)), [fullDb.projects, teamUserIds]);
-  const userSubProjects = useMemo(() => fullDb.subProjects.filter((i) => teamUserIds.includes(i.createdBy)), [fullDb.subProjects, teamUserIds]);
-  const userActivityTypes = useMemo(() => fullDb.activityTypes || [], [fullDb.activityTypes]);
+  // Use the local arrays directly since they are now securely scoped by the backend
+  const userCompanies = companies;
+  const userStakeholders = stakeholders;
+  const userProjects = projects;
+  const userSubProjects = subProjects;
+  const userActivityTypes = activityTypes;
 
   const userTeamMembers = useMemo(() => {
-    // 1. Custom team members created by anyone in the group
-    const customTeammates = fullDb.teamMembers.filter((i) => teamUserIds.includes(i.createdBy));
-    // 2. Real users in the same team group (excluding self)
-    const realUsersAsTeammates = fullDb.users
-      .filter(u => teamUserIds.includes(u.id) && u.id !== user.id)
+    const customTeammates = teamMembers;
+    const realUsersAsTeammates = users
+      .filter(u => u.id !== user.id)
       .map(u => ({ id: u.id, name: u.name, isRealUser: true }));
 
     return [...customTeammates, ...realUsersAsTeammates];
-  }, [fullDb.teamMembers, fullDb.users, teamUserIds, user.id]);
+  }, [teamMembers, users, user.id]);
+
+  // Create a local `fullDb` object to pass down to children components 
+  // so they don't break until they are also refactored to fetch their own data.
+  const localDb = { users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers };
 
   const handleAiFill = async ({ projectName, companyNames, subProjects, purpose }) => {
     // 1. Create or reuse companies
@@ -248,7 +293,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
       purpose,
       createdBy: user.id,
     });
-    setFullDb((prev) => ({ ...prev, projects: [...prev.projects, newProject] }));
+    setProjects((prev) => [...prev, newProject]);
 
     // 4. Create sub-projects sequentially
     const projectId = newProject.id || newProject._id;
@@ -258,7 +303,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
       createdSubProjects.push(sp);
     }
     if (createdSubProjects.length > 0) {
-      setFullDb((prev) => ({ ...prev, subProjects: [...prev.subProjects, ...createdSubProjects] }));
+      setSubProjects((prev) => [...prev, ...createdSubProjects]);
     }
     showToast(`Project "${projectName}" created with ${createdSubProjects.length} sub-projects.`, 'success');
   };
@@ -285,7 +330,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
     setIsGeneratingReport(true);
     setReportData(null);
     try {
-      const result = await api.generateSummary(userTimeEntries, fullDb, 'employee');
+      const result = await api.generateSummary(userTimeEntries, localDb, 'employee');
       setReportData(result.summary);
     } catch (error) {
       showToast(`Failed to generate report: ${error.message}`, 'error');
@@ -301,8 +346,8 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
       return;
     }
     const dataToExport = userTimeEntries.map((entry) => {
-      const project = fullDb.projects.find((p) => p.id === entry.projectId);
-      const company = fullDb.companies.find((c) => c.id === project?.companyId);
+      const project = projects.find((p) => p.id === entry.projectId);
+      const company = companies.find((c) => c.id === project?.companyId);
       return {
         Date: entry.date,
         StartTime: entry.startTime,
@@ -310,8 +355,8 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
         Hours: entry.hours.toFixed(2),
         Company: company?.name || 'N/A',
         Project: project?.name || 'N/A',
-        SubProject: fullDb.subProjects.find((sp) => sp.id === entry.subProjectId)?.name || 'N/A',
-        Activity: fullDb.activityTypes.find((a) => a.id === entry.activityTypeId)?.name || 'N/A',
+        SubProject: subProjects.find((sp) => sp.id === entry.subProjectId)?.name || 'N/A',
+        Activity: activityTypes.find((a) => a.id === entry.activityTypeId)?.name || 'N/A',
         Location: entry.workLocation,
         Priority: entry.priority,
         Description: entry.description,
@@ -421,18 +466,18 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
                 </div>
               )}
 
-              <TimeEntryList entries={userTimeEntries} allUsers={fullDb.users} fullDb={fullDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} currentUserId={user.id} />
+              <TimeEntryList entries={userTimeEntries} allUsers={users} fullDb={localDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} currentUserId={user.id} />
             </>
           ) : (
-            <EmployeeCardView projects={userProjects} subProjects={userSubProjects} timeEntries={userTimeEntries} allUsers={fullDb.users} fullDb={fullDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} currentUserId={user.id} />
+            <EmployeeCardView projects={userProjects} subProjects={userSubProjects} timeEntries={userTimeEntries} allUsers={users} fullDb={localDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} currentUserId={user.id} />
           )}
         </div>
       </div>
       ) : activeView === 'taskkeep' ? (
         <TaskKeepView
           user={user}
-          fullDb={fullDb}
-          setFullDb={setFullDb}
+          fullDb={localDb}
+          setFullDb={() => {}} // Stub it until TaskKeepView is refactored 
           isManager={false}
           showToast={showToast}
           onOpenTimeEntryForm={(prefill) => {
@@ -505,7 +550,7 @@ export default function EmployeeView({ user, fullDb, setFullDb, onLogout, hasBot
           userId={user.id}
           onSaveEntry={handleSaveEntry}
           onClose={() => { setIsFormOpen(false); setFormInitialData(null); }}
-          fullDb={fullDb}
+          fullDb={localDb}
           initialData={formInitialData}
         />
       )}
