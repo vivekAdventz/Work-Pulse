@@ -156,7 +156,7 @@ ${JSON.stringify(simplified, null, 2)}`;
   }
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.5-pro',
     contents: prompt,
   });
 
@@ -184,7 +184,7 @@ ${promptMessage}
 `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.5-pro',
     contents: systemPrompt,
   });
 
@@ -223,7 +223,7 @@ User description:
 ${userPrompt}`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.5-pro',
     contents: systemPrompt,
   });
 
@@ -287,7 +287,7 @@ User task description:
 ${userPrompt}`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.5-pro',
     contents: systemPrompt,
   });
 
@@ -350,7 +350,7 @@ Available sub-projects (phases):
 ${subProjList}`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.5-pro',
     contents: systemPrompt,
   });
 
