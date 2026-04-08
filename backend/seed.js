@@ -25,7 +25,7 @@ export async function seedDatabase() {
     active: true
   });
 
-  console.log('Database seeded with superadmin (email: superadmin@workpulse.com, password: admin@123)');
+  console.log('Database seeded with superadmin (email: superadmin@adventz.com, password: superadmin@123)');
 }
 
 // Run executed directly

@@ -61,11 +61,37 @@ const api = {
   microsoftLogin: (msAccessToken) => api.request('/auth/microsoft', 'POST', { msAccessToken }),
   superadminLogin: (email, password) => api.request('/auth/superadmin-login', 'POST', { email, password }),
   manualLogin: (email, password) => api.request('/auth/manual-login', 'POST', { email, password }),
+  verifyOtp: (email, otp) => api.request('/auth/verify-otp', 'POST', { email, otp }),
+  setPassword: (email, otp, newPassword) => api.request('/auth/set-password', 'POST', { email, otp, newPassword }),
+  resendOtp: (email, password) => api.request('/auth/resend-otp', 'POST', { email, password }),
+  forgotPassword: (email) => api.request('/auth/forgot-password', 'POST', { email }),
   login: (email) => api.request('/login', 'POST', { email }),
 
   // Data endpoints
-  getAllData: () => api.request('/all-data'),
-  generateSummary: (timeEntries, fullDb) => api.request('/generate-summary', 'POST', { timeEntries, fullDb }),
+  getUsers: () => api.request('/users'),
+  getTimeEntries: () => api.request('/timeEntries'),
+  getCompanies: () => api.request('/companies'),
+  getStakeholders: () => api.request('/stakeholders'),
+  getProjects: () => api.request('/projects'),
+  getSubProjects: () => api.request('/subProjects'),
+  getActivityTypes: () => api.request('/activityTypes'),
+  getTeamMembers: () => api.request('/teamMembers'),
+  
+  getAllData: async () => {
+    const [users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers] = await Promise.all([
+      api.getUsers(),
+      api.getTimeEntries(),
+      api.getCompanies(),
+      api.getStakeholders(),
+      api.getProjects(),
+      api.getSubProjects(),
+      api.getActivityTypes(),
+      api.getTeamMembers(),
+    ]);
+    return { users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers };
+  },
+
+  generateSummary: (timeEntries, fullDb, reportType = 'employee') => api.request('/generate-summary', 'POST', { timeEntries, fullDb, reportType }),
   generateDescription: (prompt) => api.request('/generate-description', 'POST', { prompt }),
   downloadCsv: (entries) => api.request('/download-csv', 'POST', { entries }, 'blob'),
   updateUser: (userId, userData) => api.request(`/users/${userId}`, 'PUT', userData),
@@ -77,6 +103,20 @@ const api = {
   addTimeEntry: (entryData) => api.request('/timeEntries', 'POST', entryData),
   updateTimeEntry: (entryId, entryData) => api.request(`/timeEntries/${entryId}`, 'PUT', entryData),
   deleteTimeEntry: (entryId) => api.request(`/timeEntries/${entryId}`, 'DELETE'),
+  fillByAI: (prompt) => api.request('/fill-by-ai', 'POST', { prompt }),
+  fillEntryByAI: (prompt) => api.request('/fill-entry-by-ai', 'POST', { prompt }),
+
+  // TaskKeep endpoints
+  getTaskDays: () => api.request('/taskKeep'),
+  createTaskDay: (date) => api.request('/taskKeep', 'POST', { date }),
+  updateTaskDay: (dayId, data) => api.request(`/taskKeep/${dayId}`, 'PUT', data),
+  deleteTaskDay: (dayId) => api.request(`/taskKeep/${dayId}`, 'DELETE'),
+  addTaskToDay: (dayId, taskData) => api.request(`/taskKeep/${dayId}/tasks`, 'POST', taskData),
+  updateTaskInDay: (dayId, taskId, taskData) => api.request(`/taskKeep/${dayId}/tasks/${taskId}`, 'PUT', taskData),
+  deleteTaskFromDay: (dayId, taskId) => api.request(`/taskKeep/${dayId}/tasks/${taskId}`, 'DELETE'),
+  moveTask: (dayId, taskId, targetDate) => api.request(`/taskKeep/${dayId}/tasks/${taskId}/move`, 'POST', { targetDate }),
+  generatePlan: (data) => api.request('/taskKeep/generate-plan', 'POST', data),
+  executePlan: (data) => api.request('/taskKeep/execute-plan', 'POST', data),
 };
 
 export default api;

@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
-import { PlayIcon, PauseIcon, StopIcon } from './Icons';
+import { PlayIcon, PauseIcon, StopIcon } from '../common/Icons';
 
 export default function TimerModal({ onStop }) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);

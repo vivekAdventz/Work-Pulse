@@ -8,6 +8,8 @@ import TeamMember from '../models/TeamMember.js';
 import Company from '../models/Company.js';
 import Stakeholder from '../models/Stakeholder.js';
 
+import { getTeamUserIds } from '../services/teamService.js';
+
 export const getHierarchy = async (req, res) => {
   const managerId = req.params.id;
   const allUsers = await User.find({ active: true });
@@ -31,7 +33,12 @@ export const getHierarchy = async (req, res) => {
 };
 
 export const getAll = async (req, res) => {
-  const users = await User.find();
+  if (req.user.roles && req.user.roles.includes('Superadmin')) {
+    const users = await User.find();
+    return res.json(users);
+  }
+  const teamIds = await getTeamUserIds(req.user.userId);
+  const users = await User.find({ _id: { $in: teamIds } });
   res.json(users);
 };
 

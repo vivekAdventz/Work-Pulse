@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import api from '../api';
-import { msalInstance, loginRequest } from '../msalConfig';
+import { useState, useEffect } from 'react';
+import api from '../../api';
+import { msalInstance, loginRequest } from '../../msalConfig';
 
 function TimesheetIllustration() {
   return (
@@ -72,6 +72,20 @@ export default function LoginScreen({ onLogin }) {
   const [loginMode, setLoginMode] = useState('manual');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [requiresOtp, setRequiresOtp] = useState(false);
+  const [isOtpVerified, setIsOtpVerified] = useState(false);
+  const [otpField, setOtpField] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(120);
+
+  useEffect(() => {
+    if (requiresOtp && timeLeft > 0) {
+      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [requiresOtp, timeLeft]);
 
   const handleMicrosoftLogin = async () => {
     setError('');
@@ -91,10 +105,90 @@ export default function LoginScreen({ onLogin }) {
     setIsLoading(true);
     try {
       const result = await api.manualLogin(email, password);
+      if (result.requiresOtp) {
+        setRequiresOtp(true);
+        setTimeLeft(120);
+      } else {
+        localStorage.setItem('authToken', result.token);
+        onLogin(result.user);
+      }
+    } catch (err) {
+      setError(err.message || 'Invalid credentials.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    try {
+      const result = await api.verifyOtp(email, otpField);
+      if (result.verified) {
+        setIsOtpVerified(true);
+      }
+    } catch (err) {
+      setError(err.message || 'Invalid OTP.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSetPassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+
+    setError('');
+    setIsLoading(true);
+    try {
+      const result = await api.setPassword(email, otpField, newPassword);
       localStorage.setItem('authToken', result.token);
       onLogin(result.user);
     } catch (err) {
-      setError(err.message || 'Invalid credentials.');
+      setError(err.message || 'Failed to set password.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    try {
+      const result = await api.forgotPassword(email);
+      if (result.requiresOtp) {
+        setRequiresOtp(true);
+        setTimeLeft(120);
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to initiate password reset.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      if (isForgotPassword) {
+        await api.forgotPassword(email);
+      } else {
+        await api.resendOtp(email, password);
+      }
+      setTimeLeft(120);
+      setOtpField('');
+    } catch (err) {
+      setError(err.message || 'Failed to resend OTP.');
     } finally {
       setIsLoading(false);
     }
@@ -157,14 +251,14 @@ export default function LoginScreen({ onLogin }) {
           <div className="flex rounded-xl bg-slate-100 p-1">
             <button
               type="button"
-              onClick={() => { setLoginMode('manual'); setError(''); }}
+              onClick={() => { setLoginMode('manual'); setError(''); setRequiresOtp(false); setIsOtpVerified(false); setIsForgotPassword(false); }}
               className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${loginMode === 'manual' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Email &amp; Password
             </button>
             <button
               type="button"
-              onClick={() => { setLoginMode('microsoft'); setError(''); }}
+              onClick={() => { setLoginMode('microsoft'); setError(''); setRequiresOtp(false); setIsOtpVerified(false); setIsForgotPassword(false); }}
               className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${loginMode === 'microsoft' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Microsoft SSO
@@ -178,7 +272,141 @@ export default function LoginScreen({ onLogin }) {
             </div>
           )}
 
-          {loginMode === 'manual' ? (
+          {isForgotPassword && !requiresOtp ? (
+            <form onSubmit={handleForgotPassword} className="space-y-5">
+              <div>
+                <label htmlFor="reset-email" className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
+                <input
+                  id="reset-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition"
+                  placeholder="name@company.com"
+                  disabled={isLoading}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isLoading || !email}
+                className="w-full px-4 py-3 font-semibold text-white bg-sky-600 rounded-xl shadow-md shadow-sky-200 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-all disabled:bg-slate-400 disabled:shadow-none disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                   <span className="flex items-center justify-center gap-2">
+                     <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                     Sending...
+                   </span>
+                ) : 'Send OTP'}
+              </button>
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsForgotPassword(false)}
+                  className="text-sky-600 hover:text-sky-800 text-sm font-medium focus:outline-none transition-colors"
+                >
+                  Back to Login
+                </button>
+              </div>
+            </form>
+          ) : requiresOtp && !isOtpVerified ? (
+            <form onSubmit={handleVerifyOtp} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Enter OTP</label>
+                <div className="flex flex-col space-y-2">
+                  <input
+                    type="text"
+                    required
+                    value={otpField}
+                    onChange={(e) => setOtpField(e.target.value)}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-xl placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition text-center tracking-widest font-bold text-lg"
+                    placeholder="• • • • • •"
+                    maxLength={6}
+                    disabled={isLoading}
+                  />
+                  <div className="flex justify-between items-center text-sm mt-1">
+                    <span className="text-slate-500 text-xs">Sent to {email}</span>
+                    <span className={`font-mono font-medium ${timeLeft < 30 ? 'text-red-500 animate-pulse' : 'text-slate-600'}`}>
+                      {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                type="submit"
+                disabled={isLoading || timeLeft === 0}
+                className="w-full px-4 py-3 font-semibold text-white bg-sky-600 rounded-xl shadow-md shadow-sky-200 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-all disabled:bg-slate-400 disabled:shadow-none disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    Verifying...
+                  </span>
+                ) : 'Verify & Login'}
+              </button>
+
+              {timeLeft === 0 && (
+                <div className="text-center pt-2 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={isLoading}
+                    className="text-sky-600 hover:text-sky-800 text-sm font-medium focus:outline-none transition-colors"
+                  >
+                     Resend OTP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setRequiresOtp(false); setIsForgotPassword(false); }}
+                    disabled={isLoading}
+                    className="text-slate-500 hover:text-slate-700 text-sm focus:outline-none transition-colors mt-2"
+                  >
+                     Cancel
+                  </button>
+                </div>
+              )}
+            </form>
+          ) : requiresOtp && isOtpVerified ? (
+            <form onSubmit={handleSetPassword} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition"
+                  placeholder="Enter new password"
+                  disabled={isLoading}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirm Password</label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition"
+                  placeholder="Confirm new password"
+                  disabled={isLoading}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full px-4 py-3 font-semibold text-white bg-sky-600 rounded-xl shadow-md shadow-sky-200 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-all disabled:bg-slate-400 disabled:shadow-none disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                     <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                     Updating...
+                  </span>
+                ) : 'Set Password & Login'}
+              </button>
+            </form>
+          ) : loginMode === 'manual' ? (
             <form onSubmit={handleManualLogin} className="space-y-5">
               <div>
                 <label htmlFor="login-email" className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
@@ -195,7 +423,10 @@ export default function LoginScreen({ onLogin }) {
                 />
               </div>
               <div>
-                <label htmlFor="login-password" className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label htmlFor="login-password" className="block text-sm font-medium text-slate-700">Password</label>
+                  <button type="button" onClick={() => { setIsForgotPassword(true); setError(''); }} className="text-sm font-medium text-sky-600 hover:text-sky-800">Forgot password?</button>
+                </div>
                 <input
                   id="login-password"
                   type="password"
