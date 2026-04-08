@@ -158,11 +158,18 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     }
   };
 
+  const selectedActivityName = userActivityTypes.find((a) => a.id === activityTypeId)?.name?.toLowerCase() || '';
+  const isLunchBreak = selectedActivityName === 'lunch/break';
+  const isHoliday = selectedActivityName === 'holiday';
+  const isSpecialMode = isLunchBreak || isHoliday;
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setFormError('');
-    if (!projectId) { setFormError('Please select a Project.'); return; }
-    if (!subProjectId) { setFormError('Please select a Sub-Project.'); return; }
+    if (!isSpecialMode) {
+      if (!projectId) { setFormError('Please select a Project.'); return; }
+      if (!subProjectId) { setFormError('Please select a Sub-Project.'); return; }
+    }
     if (!activityTypeId) { setFormError('Please select an Activity Type.'); return; }
     if (hours <= 0) { setFormError('End time must be after start time.'); return; }
     onSaveEntry({
@@ -172,14 +179,14 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       startTime,
       endTime,
       hours,
-      projectId,
-      subProjectId,
+      projectId: isSpecialMode ? undefined : projectId,
+      subProjectId: isSpecialMode ? undefined : subProjectId,
       activityTypeId,
-      priority,
-      workLocation,
-      teamMemberIds,
-      stakeholderIds,
-      description,
+      priority: isSpecialMode ? 'Medium' : priority,
+      workLocation: isSpecialMode ? 'Office' : workLocation,
+      teamMemberIds: isSpecialMode ? [] : teamMemberIds,
+      stakeholderIds: isSpecialMode ? [] : stakeholderIds,
+      description: isLunchBreak ? '' : description,
     });
   };
 
@@ -238,19 +245,21 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
             </div>
 
             {/* ── Fill by AI Section ── */}
-            <div className="flex justify-start">
-              <button
-                type="button"
-                onClick={() => setIsAiActive(!isAiActive)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-md transition-all hover:opacity-90"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}
-              >
-                <AiWandIcon />
-                {isAiActive ? 'Hide Fill by AI' : 'Fill by AI'}
-              </button>
-            </div>
+            {!isSpecialMode && (
+              <div className="flex justify-start">
+                <button
+                  type="button"
+                  onClick={() => setIsAiActive(!isAiActive)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-md transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}
+                >
+                  <AiWandIcon />
+                  {isAiActive ? 'Hide Fill by AI' : 'Fill by AI'}
+                </button>
+              </div>
+            )}
 
-            {isAiActive && (
+            {isAiActive && !isSpecialMode && (
               <div className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-4 space-y-3 animate-fadeIn">
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 text-white">
@@ -339,43 +348,8 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
             {/* ── Rest of form fields ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
 
-              {/* Project */}
-              <div>
-                <label className={labelClasses}>Project <span className="text-red-400">*</span></label>
-                <select
-                  value={projectId}
-                  onChange={(e) => { setProjectId(e.target.value); setSubProjectId(''); }}
-                  required
-                  className={inputClasses}
-                >
-                  <option value="">Select Project</option>
-                  {userProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-
-              {/* Sub-Project */}
-              <div>
-                <label className={labelClasses}>Sub-Project <span className="text-red-400">*</span></label>
-                <select
-                  value={subProjectId}
-                  onChange={(e) => setSubProjectId(e.target.value)}
-                  required
-                  disabled={!projectId}
-                  className={`${inputClasses} disabled:bg-slate-100`}
-                >
-                  <option value="">Select Sub-Project</option>
-                  {availableSubProjects.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
-                </select>
-              </div>
-
-              {/* Company (auto) */}
-              <div>
-                <label className={labelClasses}>Companies <span className="text-xs text-slate-400">(auto)</span></label>
-                <input type="text" value={companies.map(c => c.name).join(', ') || ''} readOnly className={readOnlyInputClasses} />
-              </div>
-
               {/* Activity Type */}
-              <div>
+              <div className={isSpecialMode ? 'md:col-span-2' : ''}>
                 <label className={labelClasses}>Activity Type <span className="text-red-400">*</span></label>
                 <select value={activityTypeId} onChange={(e) => setActivityTypeId(e.target.value)} required className={inputClasses}>
                   <option value="">Select Activity</option>
@@ -383,76 +357,121 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
                 </select>
               </div>
 
-              {/* Priority + Location */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClasses}>Priority</label>
-                  <select value={priority} onChange={(e) => setPriority(e.target.value)} className={inputClasses}>
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClasses}>Location</label>
-                  <select value={workLocation} onChange={(e) => setWorkLocation(e.target.value)} className={inputClasses}>
-                    <option>Office</option>
-                    <option>Client</option>
-                    <option>Home</option>
-                  </select>
-                </div>
-              </div>
+              {!isSpecialMode && (
+                <>
+                  {/* Project */}
+                  <div>
+                    <label className={labelClasses}>Project <span className="text-red-400">*</span></label>
+                    <select
+                      value={projectId}
+                      onChange={(e) => { setProjectId(e.target.value); setSubProjectId(''); }}
+                      required={!isSpecialMode}
+                      className={inputClasses}
+                    >
+                      <option value="">Select Project</option>
+                      {userProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
 
-              {/* Team Members */}
-              <div>
-                <label className={labelClasses}>Team Members <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
-                <select
-                  multiple
-                  value={teamMemberIds}
-                  onChange={(e) => setTeamMemberIds(Array.from(e.target.selectedOptions, (o) => o.value))}
-                  className={`${inputClasses} h-28 overflow-y-auto`}
-                >
-                  {userTeamMembers.map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
-                </select>
-              </div>
+                  {/* Sub-Project */}
+                  <div>
+                    <label className={labelClasses}>Sub-Project <span className="text-red-400">*</span></label>
+                    <select
+                      value={subProjectId}
+                      onChange={(e) => setSubProjectId(e.target.value)}
+                      required={!isSpecialMode}
+                      disabled={!projectId}
+                      className={`${inputClasses} disabled:bg-slate-100`}
+                    >
+                      <option value="">Select Sub-Project</option>
+                      {availableSubProjects.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                    </select>
+                  </div>
 
-              {/* Stakeholders */}
-              <div>
-                <label className={labelClasses}>Stakeholders <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
-                <select
-                  multiple
-                  value={stakeholderIds}
-                  onChange={(e) => setStakeholderIds(Array.from(e.target.selectedOptions, (o) => o.value))}
-                  className={`${inputClasses} h-28 overflow-y-auto`}
-                >
-                  {userStakeholders.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
+                  {/* Company (auto) */}
+                  <div>
+                    <label className={labelClasses}>Companies <span className="text-xs text-slate-400">(auto)</span></label>
+                    <input type="text" value={companies.map(c => c.name).join(', ') || ''} readOnly className={readOnlyInputClasses} />
+                  </div>
+                </>
+              )}
+
+              {!isSpecialMode && (
+                <>
+                  {/* Priority + Location */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelClasses}>Priority</label>
+                      <select value={priority} onChange={(e) => setPriority(e.target.value)} className={inputClasses}>
+                        <option>Low</option>
+                        <option>Medium</option>
+                        <option>High</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClasses}>Location</label>
+                      <select value={workLocation} onChange={(e) => setWorkLocation(e.target.value)} className={inputClasses}>
+                        <option>Office</option>
+                        <option>Client</option>
+                        <option>Home</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Team Members */}
+                  <div>
+                    <label className={labelClasses}>Team Members <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
+                    <select
+                      multiple
+                      value={teamMemberIds}
+                      onChange={(e) => setTeamMemberIds(Array.from(e.target.selectedOptions, (o) => o.value))}
+                      className={`${inputClasses} h-28 overflow-y-auto`}
+                    >
+                      {userTeamMembers.map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Stakeholders */}
+                  <div>
+                    <label className={labelClasses}>Stakeholders <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
+                    <select
+                      multiple
+                      value={stakeholderIds}
+                      onChange={(e) => setStakeholderIds(Array.from(e.target.selectedOptions, (o) => o.value))}
+                      className={`${inputClasses} h-28 overflow-y-auto`}
+                    >
+                      {userStakeholders.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
 
               {/* Description */}
-              <div className="md:col-span-2">
-                <div className="flex items-center justify-between mb-1">
-                  <label className={labelClasses}>Description</label>
-                  <div className="flex items-center gap-2">
-                    {description && (
-                      <span className="text-xs text-slate-400">{description.length} chars</span>
-                    )}
+              {!isLunchBreak && (
+                <div className="md:col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className={labelClasses}>Description</label>
+                    <div className="flex items-center gap-2">
+                      {description && (
+                        <span className="text-xs text-slate-400">{description.length} chars</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  placeholder="Enter task description or use Fill by AI above…"
-                  className={`${inputClasses} mt-1`}
-                />
-                {description && description.trim().startsWith('-') && (
-                  <div
-                    className="mt-2 p-3 border border-violet-100 rounded-lg bg-violet-50 text-sm prose prose-sm prose-violet max-w-none"
-                    dangerouslySetInnerHTML={{ __html: marked.parse(description) }}
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    placeholder={isHoliday ? "Enter details for the holiday/leave..." : "Enter task description or use Fill by AI above…"}
+                    className={`${inputClasses} mt-1`}
                   />
-                )}
-              </div>
+                  {description && description.trim().startsWith('-') && (
+                    <div
+                      className="mt-2 p-3 border border-violet-100 rounded-lg bg-violet-50 text-sm prose prose-sm prose-violet max-w-none"
+                      dangerouslySetInnerHTML={{ __html: marked.parse(description) }}
+                    />
+                  )}
+                </div>
+              )}
 
             </div>
           </div>

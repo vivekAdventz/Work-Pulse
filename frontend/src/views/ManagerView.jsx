@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { marked } from 'marked';
+import html2pdf from 'html2pdf.js';
 import api from '../api';
 import MainLayout from '../components/layout/MainLayout';
 import TimeEntryList from '../components/timeentry/TimeEntryList';
@@ -11,6 +12,7 @@ import { SparklesIcon, ListIcon, CalendarIcon } from '../components/common/Icons
 import TaskKeepView from '../components/taskkeep/TaskKeepView';
 import TimeEntryForm from '../components/timeentry/TimeEntryForm';
 import Toast, { useToast } from '../components/common/Toast';
+import ReportModal from '../components/modals/ReportModal';
 
 export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
   const { toasts, showToast, removeToast } = useToast();
@@ -81,7 +83,6 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
   const [summary, setSummary] = useState('');
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
-  const modalRef = useRef();
 
   const handleFilterChange = (key, value) => {
     if (key === 'startDate' && value > filters.endDate) {
@@ -133,6 +134,7 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
     }));
   }, [filteredEntries, fullDb.users]);
 
+  
   const handleGenerateSummaryClick = async () => {
     setIsSummaryModalOpen(true);
     setIsSummaryLoading(true);
@@ -148,8 +150,36 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
     }
   };
 
-  const handleBackdropClick = (e) => {
-    if (modalRef.current === e.target) setIsSummaryModalOpen(false);
+  const handleDownloadCsv = async () => {
+    if (filteredEntries.length === 0) {
+      showToast('No entries to download', 'error');
+      return;
+    }
+    try {
+      const data = filteredEntries.map(e => ({
+        Date: new Date(e.date).toLocaleDateString(),
+        Employee: fullDb.users.find(u => u.id === e.userId)?.name || 'Unknown',
+        Project: fullDb.projects.find(p => p.id === e.projectId)?.name || 'Unknown',
+        'Sub-Project': fullDb.subProjects.find(sp => sp.id === e.subProjectId)?.name || 'N/A',
+        Activity: fullDb.activityTypes.find(a => a.id === e.activityTypeId)?.name || 'Unknown',
+        Hours: e.hours,
+        Location: e.workLocation,
+        Billable: e.billable ? 'Yes' : 'No',
+        Description: (e.notes || '').replace(/\n/g, ' ')
+      }));
+      const blob = await api.downloadCsv(data);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `manager_report_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      showToast('Report downloaded successfully', 'success');
+    } catch (error) {
+      showToast('Error downloading report: ' + error.message, 'error');
+    }
   };
 
   const handleSaveEntry = async (entryData) => {
@@ -217,6 +247,10 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
               <div className="flex items-center p-1 bg-slate-100 rounded-xl">
                 <button onClick={() => setDashboardView('dashboard')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${dashboardView === 'dashboard' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                   <ListIcon /> Dashboard
+                </button>
+                <button onClick={() => setDashboardView('report')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${dashboardView === 'report' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  Report
                 </button>
                 <button onClick={() => setDashboardView('calendar')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${dashboardView === 'calendar' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                   <CalendarIcon /> Calendar
@@ -314,40 +348,11 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
         </div>
 
         {isSummaryModalOpen && (
-          <div ref={modalRef} onClick={handleBackdropClick} className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all duration-300">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scaleIn">
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-sky-50 to-white">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center text-white shadow-lg shadow-sky-200">
-                    <SparklesIcon />
-                  </div>
-                  <h2 className="text-xl font-bold text-slate-800">Team AI Insights</h2>
-                </div>
-                <button onClick={() => setIsSummaryModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 transition-colors">&times;</button>
-              </div>
-              <div className="p-8 max-h-[60vh] overflow-y-auto">
-                {isSummaryLoading ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <div className="relative w-16 h-16">
-                      <div className="absolute inset-0 border-4 border-sky-100 rounded-full"></div>
-                      <div className="absolute inset-0 border-4 border-sky-500 rounded-full border-t-transparent animate-spin"></div>
-                    </div>
-                    <p className="mt-6 text-slate-500 font-medium animate-pulse">Analyzing team performance...</p>
-                  </div>
-                ) : summaryError ? (
-                  <div className="bg-red-50 border-2 border-red-100 p-6 rounded-2xl text-center">
-                    <p className="text-red-800 font-bold mb-1">Analysis Interrupted</p>
-                    <p className="text-red-600 text-sm">{summaryError}</p>
-                  </div>
-                ) : (
-                  <div className="prose prose-slate max-w-none prose-p:text-slate-600 prose-headings:text-slate-800 line-relaxed" dangerouslySetInnerHTML={{ __html: marked.parse(summary) }}></div>
-                )}
-              </div>
-              <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-                <button onClick={() => setIsSummaryModalOpen(false)} className="px-6 py-2 bg-white border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Done</button>
-              </div>
-            </div>
-          </div>
+          <ReportModal
+            reportData={summaryError ? `**Error:** ${summaryError}` : summary}
+            isGenerating={isSummaryLoading}
+            onClose={() => setIsSummaryModalOpen(false)}
+          />
         )}
 
         {dashboardView === 'dashboard' ? (
@@ -380,6 +385,57 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
                 <TimeEntryList entries={filteredEntries} allUsers={allUsers} fullDb={fullDb} readOnly={true} />
               </div>
             </div>
+          </div>
+        ) : dashboardView === 'report' ? (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-bold text-slate-800">Detailed Report</h3>
+              <button
+                onClick={handleDownloadCsv}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl text-sm font-bold shadow-sm hover:bg-emerald-100 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Download CSV
+              </button>
+            </div>
+            {filteredEntries.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">No entries found for the selected filters.</div>
+            ) : (
+              <div className="overflow-x-auto ring-1 ring-slate-200 rounded-xl">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                    <tr>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Employee</th>
+                      <th className="px-4 py-3">Project</th>
+                      <th className="px-4 py-3">Sub-Project</th>
+                      <th className="px-4 py-3">Activity</th>
+                      <th className="px-4 py-3">Hours</th>
+                      <th className="px-4 py-3 max-w-xs">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {filteredEntries.map(e => (
+                      <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-2">{new Date(e.date).toLocaleDateString()}</td>
+                        <td className="px-4 py-2 font-medium">{fullDb.users.find(u => u.id === e.userId)?.name || 'Unknown'}</td>
+                        <td className="px-4 py-2">{fullDb.projects.find(p => p.id === e.projectId)?.name || 'Unknown'}</td>
+                        <td className="px-4 py-2 text-slate-500">{fullDb.subProjects.find(sp => sp.id === e.subProjectId)?.name || '-'}</td>
+                        <td className="px-4 py-2">
+                          <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-xs font-medium text-slate-600 border border-slate-200">
+                            {fullDb.activityTypes.find(a => a.id === e.activityTypeId)?.name || 'Unknown'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 font-bold text-sky-600">{e.hours}h</td>
+                        <td className="px-4 py-2 max-w-xs truncate text-xs text-slate-500" title={e.notes}>
+                          {e.notes || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : (
           <ManagerCalendarView entries={filteredEntries} fullDb={fullDb} directReports={visibleReportees} />

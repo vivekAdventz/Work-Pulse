@@ -14,7 +14,8 @@ const activities = [
   'Client Interaction',
   'Presentation / Demo',
   'Administrative Work',
-  'Break / Downtime',
+  'Holiday',
+  'Lunch/Break'
 ];
 
 async function seedActivities() {
