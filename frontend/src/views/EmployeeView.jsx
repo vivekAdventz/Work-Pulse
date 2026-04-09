@@ -545,6 +545,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
 
         </div>
       )}
+      {isTimerOpen && <TimerModal onStop={handleStopTimer} />}
       {isFormOpen && (
         <TimeEntryForm
           userId={user.id}
