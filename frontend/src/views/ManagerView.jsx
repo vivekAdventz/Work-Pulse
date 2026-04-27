@@ -160,7 +160,7 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
         Date: new Date(e.date).toLocaleDateString(),
         Employee: fullDb.users.find(u => u.id === e.userId)?.name || 'Unknown',
         Project: fullDb.projects.find(p => p.id === e.projectId)?.name || 'Unknown',
-        'Sub-Project': fullDb.subProjects.find(sp => sp.id === e.subProjectId)?.name || 'N/A',
+        'Sub-Project': (e.subProjectIds || (e.subProjectId ? [e.subProjectId] : [])).map(id => fullDb.subProjects.find(sp => sp.id === id)?.name).filter(Boolean).join(', ') || 'N/A',
         Activity: fullDb.activityTypes.find(a => a.id === e.activityTypeId)?.name || 'Unknown',
         Hours: e.hours,
         Location: e.workLocation,
@@ -420,7 +420,7 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
                         <td className="px-4 py-2">{new Date(e.date).toLocaleDateString()}</td>
                         <td className="px-4 py-2 font-medium">{fullDb.users.find(u => u.id === e.userId)?.name || 'Unknown'}</td>
                         <td className="px-4 py-2">{fullDb.projects.find(p => p.id === e.projectId)?.name || 'Unknown'}</td>
-                        <td className="px-4 py-2 text-slate-500">{fullDb.subProjects.find(sp => sp.id === e.subProjectId)?.name || '-'}</td>
+                        <td className="px-4 py-2 text-slate-500">{(e.subProjectIds || (e.subProjectId ? [e.subProjectId] : [])).map(id => fullDb.subProjects.find(sp => sp.id === id)?.name).filter(Boolean).join(', ') || '-'}</td>
                         <td className="px-4 py-2">
                           <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-xs font-medium text-slate-600 border border-slate-200">
                             {fullDb.activityTypes.find(a => a.id === e.activityTypeId)?.name || 'Unknown'}

@@ -29,7 +29,7 @@ export const update = async (req, res) => {
 
   const fields = [
     'date', 'startTime', 'endTime', 'hours', 'description',
-    'priority', 'workLocation', 'projectId', 'subProjectId',
+    'priority', 'workLocation', 'projectId', 'subProjectIds',
     'activityTypeId', 'teamMemberIds',
   ];
   fields.forEach((field) => {

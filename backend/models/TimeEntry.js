@@ -10,7 +10,7 @@ const timeEntrySchema = new mongoose.Schema({
   workLocation: { type: String, default: 'Office' },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
-  subProjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubProject' },
+  subProjectIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SubProject' }],
   activityTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'ActivityType', required: true },
   teamMemberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'TeamMember' }],
   stakeholderIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Stakeholder' }],

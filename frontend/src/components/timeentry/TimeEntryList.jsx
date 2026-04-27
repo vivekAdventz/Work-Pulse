@@ -1,4 +1,4 @@
-﻿import { EditIcon, DeleteIcon, EmptyIcon } from '../common/Icons';
+import { EditIcon, DeleteIcon, EmptyIcon } from '../common/Icons';
 
 export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry, onEditEntry, readOnly = false, currentUserId }) {
   if (entries.length === 0) {
@@ -56,11 +56,11 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{userMap.get(entry.userId) || 'Unknown'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{projectMap.get(entry.projectId) || 'N/A'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{subProjectMap.get(entry.subProjectId) || 'N/A'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{(entry.subProjectIds || (entry.subProjectId ? [entry.subProjectId] : [])).map(id => subProjectMap.get(id)).filter(Boolean).join(', ') || 'N/A'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{activityMap.get(entry.activityTypeId) || 'N/A'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-sky-600">{entry.hours.toFixed(2)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.startTime}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.endTime}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.startTime?.toString().slice(0, 5)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.endTime?.toString().slice(0, 5)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.workLocation}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.priority}</td>
                 <td className="px-6 py-4 text-sm text-slate-600 max-w-xs truncate" title={(entry.teamMemberIds || []).map(id => teamMemberMap.get(id)).filter(Boolean).join(', ')}>

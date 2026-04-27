@@ -8,10 +8,10 @@ const MAX_CHARS = 300;
 
 export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, initialData }) {
   const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
-  const [startTime, setStartTime] = useState(initialData?.startTime || '09:00:00');
-  const [endTime, setEndTime] = useState(initialData?.endTime || '17:00:00');
+  const [startTime, setStartTime] = useState(initialData?.startTime || '10:00');
+  const [endTime, setEndTime] = useState(initialData?.endTime || '19:00');
   const [projectId, setProjectId] = useState(initialData?.projectId || '');
-  const [subProjectId, setSubProjectId] = useState(initialData?.subProjectId || '');
+  const [subProjectIds, setSubProjectIds] = useState(initialData?.subProjectIds || (initialData?.subProjectId ? [initialData.subProjectId] : []));
   const [activityTypeId, setActivityTypeId] = useState(initialData?.activityTypeId || '');
   const [priority, setPriority] = useState(initialData?.priority || 'Medium');
   const [workLocation, setWorkLocation] = useState(initialData?.workLocation || 'Office');
@@ -35,10 +35,10 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
   useEffect(() => {
     if (initialData) {
       setDate(initialData.date || new Date().toISOString().split('T')[0]);
-      setStartTime(initialData.startTime || '09:00:00');
-      setEndTime(initialData.endTime || '17:00:00');
+      setStartTime(initialData.startTime || '10:00');
+      setEndTime(initialData.endTime || '19:00');
       setProjectId(initialData.projectId || '');
-      setSubProjectId(initialData.subProjectId || '');
+      setSubProjectIds(initialData.subProjectIds || (initialData.subProjectId ? [initialData.subProjectId] : []));
       setActivityTypeId(initialData.activityTypeId || '');
       setPriority(initialData.priority || 'Medium');
       setWorkLocation(initialData.workLocation || 'Office');
@@ -122,10 +122,10 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
             const matchedSub = fullDb.subProjects.find(
               (sp) => sp.id === result.subProjectId && sp.projectId === matchedProject.id
             );
-            if (matchedSub) setSubProjectId(matchedSub.id);
-            else setSubProjectId('');
+            if (matchedSub) setSubProjectIds([matchedSub.id]);
+            else setSubProjectIds([]);
           } else {
-            setSubProjectId('');
+            setSubProjectIds([]);
           }
         }
       }
@@ -168,7 +168,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     setFormError('');
     if (!isSpecialMode) {
       if (!projectId) { setFormError('Please select a Project.'); return; }
-      if (!subProjectId) { setFormError('Please select a Sub-Project.'); return; }
+      if (subProjectIds.length === 0) { setFormError('Please select at least one Sub-Project.'); return; }
     }
     if (!activityTypeId) { setFormError('Please select an Activity Type.'); return; }
     if (hours <= 0) { setFormError('End time must be after start time.'); return; }
@@ -180,7 +180,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       endTime,
       hours,
       projectId: isSpecialMode ? undefined : projectId,
-      subProjectId: isSpecialMode ? undefined : subProjectId,
+      subProjectIds: isSpecialMode ? [] : subProjectIds,
       activityTypeId,
       priority: isSpecialMode ? 'Medium' : priority,
       workLocation: isSpecialMode ? 'Office' : workLocation,
@@ -231,11 +231,11 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className={labelClasses}>Start</label>
-                  <input type="time" step="1" value={startTime} onChange={(e) => setStartTime(e.target.value)} required className={inputClasses} />
+                  <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required className={inputClasses} />
                 </div>
                 <div>
                   <label className={labelClasses}>End</label>
-                  <input type="time" step="1" value={endTime} onChange={(e) => setEndTime(e.target.value)} required className={inputClasses} />
+                  <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required className={inputClasses} />
                 </div>
                 <div>
                   <label className={labelClasses}>Hours</label>
@@ -364,7 +364,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
                     <label className={labelClasses}>Project <span className="text-red-400">*</span></label>
                     <select
                       value={projectId}
-                      onChange={(e) => { setProjectId(e.target.value); setSubProjectId(''); }}
+                      onChange={(e) => { setProjectId(e.target.value); setSubProjectIds([]); }}
                       required={!isSpecialMode}
                       className={inputClasses}
                     >
@@ -375,15 +375,15 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
 
                   {/* Sub-Project */}
                   <div>
-                    <label className={labelClasses}>Sub-Project <span className="text-red-400">*</span></label>
+                    <label className={labelClasses}>Sub-Project <span className="text-red-400">*</span> <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
                     <select
-                      value={subProjectId}
-                      onChange={(e) => setSubProjectId(e.target.value)}
+                      multiple
+                      value={subProjectIds}
+                      onChange={(e) => setSubProjectIds(Array.from(e.target.selectedOptions, (o) => o.value))}
                       required={!isSpecialMode}
                       disabled={!projectId}
-                      className={`${inputClasses} disabled:bg-slate-100`}
+                      className={`${inputClasses} h-28 overflow-y-auto disabled:bg-slate-100`}
                     >
-                      <option value="">Select Sub-Project</option>
                       {availableSubProjects.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
                     </select>
                   </div>

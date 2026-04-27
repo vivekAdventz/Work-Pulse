@@ -1,29 +1,28 @@
 import { useState, useMemo } from 'react';
 import { marked } from 'marked';
 
-export default function ManagerCalendarView({ entries, fullDb, directReports }) {
+export default function EmployeeCalendarView({ entries, fullDb, currentUser, onEditEntry }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedEntry, setSelectedEntry] = useState(null);
 
   const projectMap = useMemo(() => new Map(fullDb.projects.map((p) => [p.id, p.name])), [fullDb.projects]);
-  const userMap = useMemo(() => new Map(fullDb.users.map((u) => [u.id, u.name])), [fullDb.users]);
   const subProjectMap = useMemo(() => new Map(fullDb.subProjects.map((sp) => [sp.id, sp.name])), [fullDb.subProjects]);
   const activityMap = useMemo(() => new Map(fullDb.activityTypes.map((a) => [a.id, a.name])), [fullDb.activityTypes]);
   const stakeholderMap = useMemo(() => new Map(fullDb.stakeholders.map((s) => [s.id, s.name])), [fullDb.stakeholders]);
   
-  const teamMemberMap = useMemo(() => {
+  const userMap = useMemo(() => {
     const map = new Map(fullDb.users.map((u) => [u.id, u.name]));
     (fullDb.teamMembers || []).forEach(tm => { if (!map.has(tm.id)) map.set(tm.id, tm.name); });
     return map;
   }, [fullDb.users, fullDb.teamMembers]);
 
-  const userColorMap = useMemo(() => {
-    const colors = ['#38bdf8', '#fb923c', '#a78bfa', '#f472b6', '#22d3ee', '#facc15', '#4ade80', '#818cf8'];
+  // Project colors
+  const projectColorMap = useMemo(() => {
+    const colors = ['#38bdf8', '#fb923c', '#4ade80', '#a78bfa', '#f472b6', '#22d3ee', '#facc15', '#818cf8'];
     const map = new Map();
-    // Use all assigned users to color properly
-    const uniqueUsers = Array.from(new Set(entries.map(e => e.userId).filter(Boolean)));
-    uniqueUsers.forEach((userId, i) => {
-      map.set(userId, colors[i % colors.length]);
+    const uniqueProjects = Array.from(new Set(entries.map(e => e.projectId).filter(Boolean)));
+    uniqueProjects.forEach((pid, i) => {
+      map.set(pid, colors[i % colors.length]);
     });
     return map;
   }, [entries]);
@@ -54,8 +53,8 @@ export default function ManagerCalendarView({ entries, fullDb, directReports }) 
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-lg border border-slate-100">
-      <div className="flex justify-between items-center mb-4">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 animate-fadeIn">
+      <div className="flex justify-between items-center mb-4 px-6 pt-6">
         <button onClick={() => changeMonth(-1)} className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors font-bold">&lt;</button>
         <h3 className="text-xl font-bold text-slate-800 tracking-tight">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
         <div>
@@ -64,66 +63,58 @@ export default function ManagerCalendarView({ entries, fullDb, directReports }) 
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4 p-3 bg-slate-50 border border-slate-100 rounded-lg">
-        <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">Legend:</span>
-        {Array.from(userColorMap.entries()).map(([userId, color]) => (
-          <div key={userId} className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: color }}></span>
-            <span className="text-xs font-semibold text-slate-600">{userMap.get(userId) || 'Unknown'}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-          <div key={day} className="text-center font-bold text-xs py-3 bg-slate-50 text-slate-500 uppercase tracking-wider">{day}</div>
-        ))}
-        {daysInMonth.map((day, index) => {
-          const isToday = day && day.toDateString() === new Date().toDateString();
-          const dateStr = day ? day.toISOString().split('T')[0] : null;
-          const dayEntries = day && entriesByDate[dateStr] ? entriesByDate[dateStr] : [];
-          const isWeekend = day && (day.getDay() === 0 || day.getDay() === 6);
-          
-          return (
-            <div key={index} className={`bg-white p-2 min-h-[140px] relative ${!day ? 'bg-slate-50' : ''} ${isWeekend && day ? 'bg-slate-50/50' : ''} ${isToday ? 'ring-2 ring-inset ring-brand-blue/50' : ''}`}>
-              {day && (
-                <div className="flex justify-between items-start mb-2">
-                  <span className={`text-sm font-semibold flex items-center justify-center w-6 h-6 rounded-full ${isToday ? 'bg-brand-blue text-white shadow-md' : 'text-slate-600'}`}>
-                    {day.getDate()}
-                  </span>
-                  {dayEntries.length > 0 && (
-                    <span className="text-[10px] text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded shadow-inner">
-                      {dayEntries.reduce((acc, e) => acc + e.hours, 0).toFixed(1)}h
+      <div className="px-6 pb-6">
+        <div className="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+            <div key={day} className="text-center font-bold text-xs py-3 bg-slate-50 text-slate-500 uppercase tracking-wider">{day}</div>
+          ))}
+          {daysInMonth.map((day, index) => {
+            const isToday = day && day.toDateString() === new Date().toDateString();
+            const dateStr = day ? day.toISOString().split('T')[0] : null;
+            const dayEntries = day && entriesByDate[dateStr] ? entriesByDate[dateStr] : [];
+            const isWeekend = day && (day.getDay() === 0 || day.getDay() === 6);
+            
+            return (
+              <div key={index} className={`bg-white p-2 min-h-[140px] relative ${!day ? 'bg-slate-50' : ''} ${isWeekend && day ? 'bg-slate-50/50' : ''} ${isToday ? 'ring-2 ring-inset ring-brand-blue/50' : ''}`}>
+                {day && (
+                  <div className="flex justify-between items-start mb-2">
+                    <span className={`text-sm font-semibold flex items-center justify-center w-6 h-6 rounded-full ${isToday ? 'bg-brand-blue text-white shadow-md' : 'text-slate-600'}`}>
+                      {day.getDate()}
                     </span>
-                  )}
-                </div>
-              )}
-              <div className="space-y-1.5 overflow-y-auto max-h-[100px] hide-scrollbar">
+                    {dayEntries.length > 0 && (
+                      <span className="text-[10px] text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded shadow-inner">
+                        {dayEntries.reduce((acc, e) => acc + e.hours, 0).toFixed(1)}h
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="space-y-1.5 overflow-y-auto max-h-[100px] hide-scrollbar">
                 {dayEntries.map((entry) => (
                   <div
                     key={entry.id}
                     onClick={() => setSelectedEntry(entry)}
                     className="text-white text-[11px] font-medium rounded-md px-2 py-1.5 truncate cursor-pointer hover:-translate-y-0.5 transition-all shadow-sm"
-                    style={{ backgroundColor: userColorMap.get(entry.userId) || '#94a3b8' }}
-                    title={`${userMap.get(entry.userId)}: ${projectMap.get(entry.projectId) || 'Unknown Project'} - ${entry.hours}h`}
+                    style={{ backgroundColor: projectColorMap.get(entry.projectId) || '#94a3b8' }}
+                    title={`${projectMap.get(entry.projectId) || 'Unknown Project'} - ${entry.hours}h`}
                   >
                     <span className="font-bold mr-1">{entry.hours.toFixed(1)}h</span>
-                    {userMap.get(entry.userId) || 'Unknown'}
+                    {projectMap.get(entry.projectId) || 'Unknown'}
                   </div>
                 ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {selectedEntry && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setSelectedEntry(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setSelectedEntry(null)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all scale-100" onClick={(e) => e.stopPropagation()}>
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-slate-50 to-white">
               <div>
                 <h3 className="text-lg font-bold text-slate-800 tracking-tight">Time Entry Details</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Logged by {userMap.get(selectedEntry.userId) || 'Unknown'}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Full information for the selected activity log.</p>
               </div>
               <button onClick={() => setSelectedEntry(null)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-200 text-slate-500 transition-colors text-lg font-bold">&times;</button>
             </div>
@@ -175,7 +166,7 @@ export default function ManagerCalendarView({ entries, fullDb, directReports }) 
                     <div>
                       <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Team Members</span>
                       <div className="flex flex-wrap gap-1.5">
-                        {selectedEntry.teamMemberIds.map(id => teamMemberMap.get(id)).filter(Boolean).map(name => (
+                        {selectedEntry.teamMemberIds.map(id => userMap.get(id)).filter(Boolean).map(name => (
                           <span key={name} className="px-2 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-md text-xs font-medium">{name}</span>
                         ))}
                       </div>
@@ -208,6 +199,18 @@ export default function ManagerCalendarView({ entries, fullDb, directReports }) 
               <button onClick={() => setSelectedEntry(null)} className="px-5 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 shadow-sm rounded-xl hover:bg-slate-50 transition-all hover:border-slate-300">
                 Close
               </button>
+              {currentUser?.id === selectedEntry.userId && onEditEntry && (
+                <button 
+                  onClick={() => {
+                    setSelectedEntry(null);
+                    onEditEntry(selectedEntry);
+                  }} 
+                  className="px-5 py-2 text-sm font-bold text-white bg-brand-blue rounded-xl shadow-md shadow-brand-blue/20 hover:bg-brand-blue-mid transition-all hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                  Edit Entry
+                </button>
+              )}
             </div>
           </div>
         </div>

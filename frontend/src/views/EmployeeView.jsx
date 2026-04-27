@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import api from '../api';
 import MainLayout from '../components/layout/MainLayout';
 import TimeEntryList from '../components/timeentry/TimeEntryList';
-import EmployeeCardView from '../components/timeentry/EmployeeCardView';
+import EmployeeCalendarView from './EmployeeCalendarView';
 import TimeEntryForm from '../components/timeentry/TimeEntryForm';
 import TimerModal from '../components/modals/TimerModal';
 import ReportModal from '../components/modals/ReportModal';
@@ -11,7 +11,7 @@ import SubProjectConfig from '../components/config/SubProjectConfig';
 import ProjectConfig from '../components/config/ProjectConfig';
 import AiFillModal from '../components/modals/AiFillModal';
 import Toast, { useToast } from '../components/common/Toast';
-import { PlusIcon, PlayIcon, GridIcon, TableIcon, AiWandIcon } from '../components/common/Icons';
+import { PlusIcon, PlayIcon, CalendarIcon, TableIcon, AiWandIcon } from '../components/common/Icons';
 import TaskKeepView from '../components/taskkeep/TaskKeepView';
 
 export default function EmployeeView({ user, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
@@ -73,7 +73,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
     loadData();
   }, [loadData]);
 
-  const getCurrentTime = () => new Date().toTimeString().slice(0, 8);
+  const getCurrentTime = () => new Date().toTimeString().slice(0, 5);
 
   const handleSaveEntry = async (entryData) => {
     try {
@@ -355,7 +355,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
         Hours: entry.hours.toFixed(2),
         Company: company?.name || 'N/A',
         Project: project?.name || 'N/A',
-        SubProject: subProjects.find((sp) => sp.id === entry.subProjectId)?.name || 'N/A',
+        SubProject: (entry.subProjectIds || (entry.subProjectId ? [entry.subProjectId] : [])).map(id => subProjects.find(sp => sp.id === id)?.name).filter(Boolean).join(', ') || 'N/A',
         Activity: activityTypes.find((a) => a.id === entry.activityTypeId)?.name || 'N/A',
         Location: entry.workLocation,
         Priority: entry.priority,
@@ -394,7 +394,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
               <div className="flex items-center gap-2.5 flex-wrap">
                 <div className="flex items-center p-1 bg-slate-100 rounded-xl shadow-inner">
                   <button onClick={() => setDashboardViewMode('table')} className={`flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-all ${dashboardViewMode === 'table' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><TableIcon /> Table</button>
-                  <button onClick={() => setDashboardViewMode('card')} className={`flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-all ${dashboardViewMode === 'card' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><GridIcon /> Cards</button>
+                  <button onClick={() => setDashboardViewMode('calendar')} className={`flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-all ${dashboardViewMode === 'calendar' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><CalendarIcon /> Calendar</button>
                 </div>
                 <button onClick={handleStartTimer} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-green rounded-xl shadow-md shadow-brand-green/20 hover:bg-brand-green-dark hover:-translate-y-0.5 active:translate-y-0 transition-all">
                   <PlayIcon /> Start Timer
@@ -468,9 +468,9 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
 
               <TimeEntryList entries={userTimeEntries} allUsers={users} fullDb={localDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} currentUserId={user.id} />
             </>
-          ) : (
-            <EmployeeCardView projects={userProjects} subProjects={userSubProjects} timeEntries={userTimeEntries} allUsers={users} fullDb={localDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} currentUserId={user.id} />
-          )}
+          ) : dashboardViewMode === 'calendar' ? (
+            <EmployeeCalendarView entries={userTimeEntries} fullDb={localDb} currentUser={user} onEditEntry={handleEditEntry} />
+          ) : null}
         </div>
       </div>
       ) : activeView === 'taskkeep' ? (
