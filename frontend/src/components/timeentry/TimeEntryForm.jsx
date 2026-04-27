@@ -12,6 +12,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
   const [endTime, setEndTime] = useState(initialData?.endTime || '19:00');
   const [projectId, setProjectId] = useState(initialData?.projectId || '');
   const [subProjectIds, setSubProjectIds] = useState(initialData?.subProjectIds || (initialData?.subProjectId ? [initialData.subProjectId] : []));
+  const [taskIds, setTaskIds] = useState(initialData?.taskIds || (initialData?.taskId ? [initialData.taskId] : []));
   const [activityTypeId, setActivityTypeId] = useState(initialData?.activityTypeId || '');
   const [priority, setPriority] = useState(initialData?.priority || 'Medium');
   const [workLocation, setWorkLocation] = useState(initialData?.workLocation || 'Office');
@@ -39,6 +40,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       setEndTime(initialData.endTime || '19:00');
       setProjectId(initialData.projectId || '');
       setSubProjectIds(initialData.subProjectIds || (initialData.subProjectId ? [initialData.subProjectId] : []));
+      setTaskIds(initialData.taskIds || (initialData.taskId ? [initialData.taskId] : []));
       setActivityTypeId(initialData.activityTypeId || '');
       setPriority(initialData.priority || 'Medium');
       setWorkLocation(initialData.workLocation || 'Office');
@@ -81,6 +83,10 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
   const availableSubProjects = useMemo(
     () => fullDb.subProjects.filter((sp) => sp.projectId === projectId && teamUserIds.includes(sp.createdBy)),
     [fullDb.subProjects, projectId, teamUserIds]
+  );
+  const availableTasks = useMemo(
+    () => (fullDb.tasks || []).filter((t) => subProjectIds.includes(t.subProjectId) && teamUserIds.includes(t.createdBy)),
+    [fullDb.tasks, subProjectIds, teamUserIds]
   );
   const userStakeholders = useMemo(() => fullDb.stakeholders.filter((s) => teamUserIds.includes(s.createdBy)), [fullDb.stakeholders, teamUserIds]);
 
@@ -181,6 +187,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       hours,
       projectId: isSpecialMode ? undefined : projectId,
       subProjectIds: isSpecialMode ? [] : subProjectIds,
+      taskIds: isSpecialMode ? [] : taskIds,
       activityTypeId,
       priority: isSpecialMode ? 'Medium' : priority,
       workLocation: isSpecialMode ? 'Office' : workLocation,
@@ -379,13 +386,33 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
                     <select
                       multiple
                       value={subProjectIds}
-                      onChange={(e) => setSubProjectIds(Array.from(e.target.selectedOptions, (o) => o.value))}
+                      onChange={(e) => {
+                        setSubProjectIds(Array.from(e.target.selectedOptions, (o) => o.value));
+                        setTaskIds([]); // Reset tasks when sub-project changes
+                      }}
                       required={!isSpecialMode}
                       disabled={!projectId}
                       className={`${inputClasses} h-28 overflow-y-auto disabled:bg-slate-100`}
                     >
                       {availableSubProjects.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
                     </select>
+                  </div>
+
+                  {/* Tasks */}
+                  <div>
+                    <label className={labelClasses}>Tasks <span className="text-slate-400 font-normal normal-case">(Optional)</span> <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
+                    <select
+                      multiple
+                      value={taskIds}
+                      onChange={(e) => setTaskIds(Array.from(e.target.selectedOptions, (o) => o.value))}
+                      disabled={subProjectIds.length === 0}
+                      className={`${inputClasses} h-28 overflow-y-auto disabled:bg-slate-100`}
+                    >
+                      {availableTasks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                    {subProjectIds.length > 0 && availableTasks.length === 0 && (
+                      <p className="text-[10px] text-slate-400 mt-1 italic">No tasks available for selected sub-projects.</p>
+                    )}
                   </div>
 
                   {/* Company (auto) */}

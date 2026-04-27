@@ -16,6 +16,7 @@ import ActivityType from '../models/ActivityType.js';
 import TeamMember from '../models/TeamMember.js';
 import Project from '../models/Project.js';
 import SubProject from '../models/SubProject.js';
+import Task from '../models/Task.js';
 
 const router = Router();
 
@@ -54,5 +55,6 @@ router.use('/activityTypes', createCrudRouter(ActivityType, async (req) => {
 router.use('/teamMembers', createCrudRouter(TeamMember, teamScopeFilter));
 router.use('/projects', createCrudRouter(Project, teamScopeFilter));
 router.use('/subProjects', createCrudRouter(SubProject, teamScopeFilter));
+router.use('/tasks', createCrudRouter(Task, teamScopeFilter));
 
 export default router;

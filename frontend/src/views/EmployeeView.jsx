@@ -9,6 +9,7 @@ import ReportModal from '../components/modals/ReportModal';
 import ConfigManager from '../components/config/ConfigManager';
 import SubProjectConfig from '../components/config/SubProjectConfig';
 import ProjectConfig from '../components/config/ProjectConfig';
+import TaskConfig from '../components/config/TaskConfig';
 import AiFillModal from '../components/modals/AiFillModal';
 import Toast, { useToast } from '../components/common/Toast';
 import { PlusIcon, PlayIcon, CalendarIcon, TableIcon, AiWandIcon } from '../components/common/Icons';
@@ -24,6 +25,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
   const [stakeholders, setStakeholders] = useState([]);
   const [projects, setProjects] = useState([]);
   const [subProjects, setSubProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [activityTypes, setActivityTypes] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
@@ -60,6 +62,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       setStakeholders(db.stakeholders || []);
       setProjects(db.projects || []);
       setSubProjects(db.subProjects || []);
+      setTasks(db.tasks || []);
       setActivityTypes(db.activityTypes || []);
       setTeamMembers(db.teamMembers || []);
     } catch (err) {
@@ -145,6 +148,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       else if (key === 'stakeholders') setStakeholders(p => [...p, newItem]);
       else if (key === 'projects') setProjects(p => [...p, newItem]);
       else if (key === 'subProjects') setSubProjects(p => [...p, newItem]);
+      else if (key === 'tasks') setTasks(p => [...p, newItem]);
       else if (key === 'teamMembers') setTeamMembers(p => [...p, newItem]);
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} added successfully.`, 'success');
     } catch (error) {
@@ -158,6 +162,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
     else if (key === 'stakeholders') list = stakeholders;
     else if (key === 'projects') list = projects;
     else if (key === 'subProjects') list = subProjects;
+    else if (key === 'tasks') list = tasks;
     else if (key === 'teamMembers') list = teamMembers;
 
     const item = list.find(i => i.id === id);
@@ -177,6 +182,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       else if (key === 'stakeholders') setStakeholders(p => p.filter(i => i.id !== id));
       else if (key === 'projects') setProjects(p => p.filter(i => i.id !== id));
       else if (key === 'subProjects') setSubProjects(p => p.filter(i => i.id !== id));
+      else if (key === 'tasks') setTasks(p => p.filter(i => i.id !== id));
       else if (key === 'teamMembers') setTeamMembers(p => p.filter(i => i.id !== id));
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} deleted.`, 'info');
     } catch (error) {
@@ -226,6 +232,16 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
     }
   };
 
+  const handleAddTask = async (name, subProjectId) => {
+    try {
+      const newTask = await api.addItem('tasks', { name, subProjectId, createdBy: user.id });
+      setTasks((prev) => [...prev, newTask]);
+      showToast('Task added successfully.', 'success');
+    } catch (error) {
+      showToast(`Failed to add task: ${error.message}`, 'error');
+    }
+  };
+
   const userTimeEntries = useMemo(() => {
     let entries = timeEntries.filter(
       (e) => {
@@ -259,6 +275,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
   const userStakeholders = stakeholders;
   const userProjects = projects;
   const userSubProjects = subProjects;
+  const userTasks = tasks;
   const userActivityTypes = activityTypes;
 
   const userTeamMembers = useMemo(() => {
@@ -272,7 +289,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
 
   // Create a local `fullDb` object to pass down to children components 
   // so they don't break until they are also refactored to fetch their own data.
-  const localDb = { users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers };
+  const localDb = { users, timeEntries, companies, stakeholders, projects, subProjects, tasks: userTasks, activityTypes, teamMembers };
 
   const handleAiFill = async ({ projectName, companyNames, subProjects, purpose }) => {
     // 1. Create or reuse companies
@@ -532,11 +549,17 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
           <ProjectConfig projects={userProjects} companies={userCompanies} onAdd={handleAddProject} onDelete={handleDeleteItem('projects')} onUpdate={handleUpdateProject} />
 
           {/* Project Scope | , Stakeholders, Team Members */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
             <div className="lg:col-span-4">
               <SubProjectConfig projects={userProjects} subProjects={userSubProjects} onAdd={handleAddSubProject} onDelete={handleDeleteItem('subProjects')} />
             </div>
-            <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            <div className="lg:col-span-8">
+              <TaskConfig projects={userProjects} subProjects={userSubProjects} tasks={userTasks} onAdd={handleAddTask} onDelete={handleDeleteItem('tasks')} />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
+            <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               <ConfigManager title="Companies" items={userCompanies} onAdd={handleAddItem('companies', user.id)} onDelete={handleDeleteItem('companies')} onUpdate={handleUpdateItem('companies')} />
               <ConfigManager title="Stakeholders" items={userStakeholders} onAdd={handleAddItem('stakeholders', user.id)} onDelete={handleDeleteItem('stakeholders')} onUpdate={handleUpdateItem('stakeholders')} />
               <ConfigManager title="Team Members" items={userTeamMembers} onAdd={handleAddItem('teamMembers', user.id)} onDelete={handleDeleteItem('teamMembers')} onUpdate={handleUpdateItem('teamMembers')} />

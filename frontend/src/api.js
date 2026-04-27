@@ -74,21 +74,23 @@ const api = {
   getStakeholders: () => api.request('/stakeholders'),
   getProjects: () => api.request('/projects'),
   getSubProjects: () => api.request('/subProjects'),
+  getTasks: () => api.request('/tasks'),
   getActivityTypes: () => api.request('/activityTypes'),
   getTeamMembers: () => api.request('/teamMembers'),
   
   getAllData: async () => {
-    const [users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers] = await Promise.all([
+    const [users, timeEntries, companies, stakeholders, projects, subProjects, tasks, activityTypes, teamMembers] = await Promise.all([
       api.getUsers(),
       api.getTimeEntries(),
       api.getCompanies(),
       api.getStakeholders(),
       api.getProjects(),
       api.getSubProjects(),
+      api.getTasks(),
       api.getActivityTypes(),
       api.getTeamMembers(),
     ]);
-    return { users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers };
+    return { users, timeEntries, companies, stakeholders, projects, subProjects, tasks, activityTypes, teamMembers };
   },
 
   generateSummary: (timeEntries, fullDb, reportType = 'employee') => api.request('/generate-summary', 'POST', { timeEntries, fullDb, reportType }),

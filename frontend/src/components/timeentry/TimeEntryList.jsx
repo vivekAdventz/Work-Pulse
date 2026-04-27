@@ -13,7 +13,8 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
 
   const userMap = new Map(allUsers.map((u) => [u.id, u.name]));
   const projectMap = new Map(fullDb.projects.map((p) => [p.id, p.name]));
-  const subProjectMap = new Map(fullDb.subProjects.map((sp) => [sp.id, sp.name]));
+  const subProjectMap = new Map((fullDb.subProjects || []).map((sp) => [sp.id, sp.name]));
+  const taskMap = new Map((fullDb.tasks || []).map((t) => [t.id, t.name]));
   const activityMap = new Map(fullDb.activityTypes.map((a) => [a.id, a.name]));
   const stakeholderMap = new Map(fullDb.stakeholders.map((s) => [s.id, s.name]));
 
@@ -25,7 +26,7 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
   const headers = [
     'Date',
     readOnly ? 'Employee' : 'Created By',
-    'Project', 'Sub-Project', 'Activity', 'Hours', 'Start', 'End', 'Location', 'Priority',
+    'Project', 'Sub-Project', 'Tasks', 'Activity', 'Hours', 'Start', 'End', 'Location', 'Priority',
     'Team Members',
     'Stakeholders', 'Description'
   ];
@@ -56,7 +57,12 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{userMap.get(entry.userId) || 'Unknown'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{projectMap.get(entry.projectId) || 'N/A'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{(entry.subProjectIds || (entry.subProjectId ? [entry.subProjectId] : [])).map(id => subProjectMap.get(id)).filter(Boolean).join(', ') || 'N/A'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 max-w-[150px] truncate" title={(entry.subProjectIds || (entry.subProjectId ? [entry.subProjectId] : [])).map(id => subProjectMap.get(id)).filter(Boolean).join(', ')}>
+                  {(entry.subProjectIds || (entry.subProjectId ? [entry.subProjectId] : [])).map(id => subProjectMap.get(id)).filter(Boolean).join(', ') || 'N/A'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 max-w-[150px] truncate" title={(entry.taskIds || (entry.taskId ? [entry.taskId] : [])).map(id => taskMap.get(id)).filter(Boolean).join(', ')}>
+                  {(entry.taskIds || (entry.taskId ? [entry.taskId] : [])).map(id => taskMap.get(id)).filter(Boolean).join(', ') || '—'}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{activityMap.get(entry.activityTypeId) || 'N/A'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-sky-600">{entry.hours.toFixed(2)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.startTime?.toString().slice(0, 5)}</td>

@@ -11,6 +11,7 @@ const timeEntrySchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
   subProjectIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SubProject' }],
+  taskIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
   activityTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'ActivityType', required: true },
   teamMemberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'TeamMember' }],
   stakeholderIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Stakeholder' }],
