@@ -3,6 +3,19 @@ import api from '../../api';
 import AIPlannerModal from './AIPlannerModal';
 import { useConfirm } from '../common/useConfirm';
 
+// ── Background slideshow images ──────────────────────────
+const BG_IMAGES = [
+  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80',
+  'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80',
+  'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1920&q=80',
+  'https://images.unsplash.com/photo-1470770903676-69b98201ea1c?w=1920&q=80',
+  'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=1920&q=80',
+  'https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=1920&q=80',
+  'https://images.unsplash.com/photo-1448375240586-882707db888b?w=1920&q=80',
+  'https://images.unsplash.com/photo-1418065460487-3e41a6c84dc5?w=1920&q=80',
+];
+const BG_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 // ─── Status Configuration ─────────────────────────────
 const STATUS_CONFIG = {
   todo: { label: 'To Do', badgeCls: 'bg-slate-100 text-slate-500', dotCls: 'text-slate-300' },
@@ -109,6 +122,21 @@ function HoverDropdown({ trigger, children, align = 'left', width = 'w-48' }) {
 // Main Component
 // ════════════════════════════════════════════════════════
 export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showToast, onOpenTimeEntryForm }) {
+  // ── Background slideshow ──────────────────────────────────
+  const [bgIndex, setBgIndex] = useState(0);
+  const [bgFading, setBgFading] = useState(false);
+  useEffect(() => {
+    if (BG_IMAGES.length <= 1) return;
+    const timer = setInterval(() => {
+      setBgFading(true);
+      setTimeout(() => {
+        setBgIndex(i => (i + 1) % BG_IMAGES.length);
+        setBgFading(false);
+      }, 800);
+    }, BG_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
+
   const [days, setDays] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dayToDelete, setDayToDelete] = useState(null);
@@ -168,14 +196,36 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
   const filteredDays = useMemo(() => {
     const targetUserId = viewingAsUser || (isManager ? null : user.id);
     if (!targetUserId) return days; // Manager sees all
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
     return days
-      .map(d => ({ ...d, tasks: d.tasks.filter(t => t.assigneeId === targetUserId) }))
-      .filter(d => d.tasks.length > 0 || (isManager && !viewingAsUser));
+      .map(d => ({
+        ...d,
+        tasks: d.tasks.filter(t => {
+          const assignee = t.assigneeId?.toString();
+          const creator = t.createdBy?.toString();
+
+          if (viewingAsUser) {
+            // Manager viewing as employee: only show tasks assigned to that employee
+            // that were NOT self-created by the employee (i.e., manager-assigned only)
+            return assignee === targetUserId && creator !== targetUserId;
+          }
+
+          // Employee's own view: show tasks assigned to them or created by them
+          return assignee === targetUserId ||
+            (!assignee && creator === targetUserId);
+        }),
+      }))
+      .filter(d => {
+        if (viewingAsUser) return d.tasks.length > 0; // Manager viewing one reportee
+        if (isManager) return true; // Manager all-tasks view keeps empty day cards
+        return d.tasks.length > 0 || d.date >= todayStr; // Employee view
+      });
   }, [days, isManager, user.id, viewingAsUser]);
 
   // ── Day operations ──
   const handleAddDay = async () => {
-    if (!isManager) return;
     let nextDate = new Date().toISOString().split('T')[0];
     let offset = 0;
     while (days.some(d => d.date === nextDate)) {
@@ -185,7 +235,10 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
     }
     try {
       const newDay = await api.createTaskDay(nextDate);
-      setDays(prev => [newDay, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+      setDays(prev => {
+        if (prev.some(d => d.id === newDay.id)) return prev;
+        return [newDay, ...prev].sort((a, b) => b.date.localeCompare(a.date));
+      });
       showToast?.('Date card created.', 'success');
     } catch (err) {
       showToast?.(`Failed to create card: ${err.message}`, 'error');
@@ -193,7 +246,6 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
   };
 
   const handleUpdateDayDate = async (dayId, newDate) => {
-    if (!isManager) return;
     if (days.some(d => d.id !== dayId && d.date === newDate)) {
       showToast?.('A card for this date already exists.', 'warning'); return;
     }
@@ -353,22 +405,37 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
   }
 
   return (
-    <div className="animate-fadeIn">
+    <div
+      className="relative -m-2 md:-m-8 p-2 md:p-8 min-h-[calc(100vh-84px)]"
+      style={{
+        backgroundImage: `url(${BG_IMAGES[bgIndex]})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+        transition: 'opacity 0.8s ease',
+        opacity: bgFading ? 0 : 1,
+      }}
+    >
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-black/30 pointer-events-none" />
+
+    <div className="relative animate-fadeIn">
       {/* ── Top bar: Add Day + Role Switcher ── */}
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 w-full px-2">
-        {isManager && !viewingAsUser ? (
+        {(!viewingAsUser || !isManager) ? (
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 flex-1">
-            <button onClick={handleAddDay} className="bg-white rounded-xl shadow-md border border-slate-200 p-4 flex items-center justify-between cursor-pointer hover:shadow-lg transition-all group flex-1 max-w-xl">
+            <button onClick={handleAddDay} className="bg-black/20 backdrop-blur-md rounded-xl shadow-md border border-white/20 p-4 flex items-center justify-between cursor-pointer hover:shadow-lg transition-all group flex-1 max-w-xl text-white">
               
-              <div className="flex items-center gap-3 text-slate-400">
+              <div className="flex items-center gap-3 text-white/60">
                 <CalendarSmIcon className="w-5 h-5" />
-                <span className="font-medium group-hover:text-slate-600 tracking-tight">Plan task map for a new date...</span>
+                <span className="font-medium group-hover:text-white tracking-tight">Plan task map for a new date...</span>
               </div>
-              <PlusIcon className="text-slate-400 group-hover:text-indigo-600 w-6 h-6" />
+              <PlusIcon className="text-white/60 group-hover:text-white w-6 h-6" />
             </button>
             <button
               onClick={() => setShowPlanner(true)}
-              className="flex items-center gap-2 px-5 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl shadow-lg shadow-indigo-200 hover:shadow-xl hover:-translate-y-0.5 transition-all font-bold text-sm shrink-0"
+              className="flex items-center gap-2 px-5 py-4 bg-indigo-600/30 backdrop-blur-md border border-indigo-300/40 text-white rounded-xl shadow-md shadow-indigo-900/20 hover:bg-indigo-600/40 hover:border-violet-300/50 hover:-translate-y-0.5 transition-all font-bold text-sm shrink-0"
             >
               <SparklesIcon className="w-5 h-5" /> Generate Plan
             </button>
@@ -444,21 +511,20 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
       ) : (
         <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6 pb-20">
           {filteredDays.map(day => (
-            <div key={day.id} className="break-inside-avoid border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group/card relative flex flex-col bg-white">
+            <div key={day.id} className="break-inside-avoid border border-white/20 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group/card relative flex flex-col bg-black/20 backdrop-blur-md">
               {/* Day header */}
-              <div className="flex items-center justify-between mb-6 border-b border-slate-50 pb-4">
+              <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
                 <div className="flex items-center gap-2">
-                  <CalendarSmIcon className="text-slate-400" />
+                  <CalendarSmIcon className="text-white/60" />
                   <input
                     type="date"
                     value={day.date}
-                    readOnly={!isManager}
                     onChange={(e) => handleUpdateDayDate(day.id, e.target.value)}
-                    className={`bg-transparent border-none p-0 font-bold text-slate-800 focus:ring-0 text-sm focus:outline-none ${isManager ? 'cursor-pointer' : 'cursor-default'}`}
+                    className="bg-transparent border-none p-0 font-bold text-white focus:ring-0 text-sm focus:outline-none cursor-pointer"
                   />
                 </div>
-                {isManager && !viewingAsUser && (
-                  <button onClick={() => setDayToDelete(day.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all opacity-40 group-hover/card:opacity-100">
+                {!viewingAsUser && (
+                  <button onClick={() => setDayToDelete(day.id)} className="p-1.5 text-white/40 hover:text-red-400 hover:bg-white/10 rounded-full transition-all opacity-40 group-hover/card:opacity-100">
                     <TrashIcon />
                   </button>
                 )}
@@ -477,6 +543,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                   const status = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
                   const StatusIcon = STATUS_ICONS[task.status] || CircleIcon;
                   const canEditTask = isManager || task.createdBy === user.id;
+                  const canMoveTask = canEditTask || (!isManager && task.assigneeId === user.id);
                   // Status: assignee only, not already done, and dependency must be done
                   const canChangeStatus = task.assigneeId === user.id && task.status !== 'done' && depDone;
                   const statusBlockReason = !depDone
@@ -516,18 +583,18 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                               }
                             }}
                             placeholder="Task details..."
-                            className={`flex-1 bg-transparent border-none p-0 text-sm focus:ring-0 focus:outline-none font-semibold resize-none overflow-hidden min-h-[1.25rem] ${task.status === 'done' ? 'line-through text-slate-400 decoration-2' : 'text-slate-700'}`}
+                            className={`flex-1 bg-transparent border-none p-0 text-sm focus:ring-0 focus:outline-none font-semibold resize-none overflow-hidden min-h-[1.25rem] ${task.status === 'done' ? 'line-through text-white/50 decoration-2' : 'text-white'}`}
                           />
                           <button 
                             onClick={() => setNoteToEdit({ dayId: day.id, taskId: task.id, description: task.description || '' })}
-                            className={`p-1.5 rounded-lg transition-all shrink-0 mt-[-2px] ${task.description ? 'text-indigo-600 bg-indigo-50 shadow-sm border border-indigo-100' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-50'}`}
+                            className={`p-1.5 rounded-lg transition-all shrink-0 mt-[-2px] ${task.description ? 'text-indigo-300 bg-indigo-500/20 shadow-sm border border-indigo-500/30' : 'text-white/50 hover:text-indigo-300 hover:bg-white/10'}`}
                             title={task.description ? 'View/Edit Notes' : 'Add Notes'}
                           >
                             <FileTextIcon className="w-3.5 h-3.5" />
                           </button>
                         </div>
                         {task.description && (
-                          <p className="text-[11px] text-slate-500 leading-relaxed font-medium line-clamp-2 px-0.5 border-l-2 border-indigo-100 pl-2 my-1">
+                          <p className="text-[11px] text-white/80 leading-relaxed font-medium line-clamp-2 px-0.5 border-l-2 border-white/20 pl-2 my-1">
                             {task.description}
                           </p>
                         )}
@@ -558,9 +625,9 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                           {/* Project picker */}
                           <HoverDropdown width="w-48" trigger={
-                            <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-black/5 px-2 py-0.5 rounded-md border border-dashed border-slate-200">
-                              <BriefcaseIcon className={project ? 'text-indigo-500' : 'text-slate-300'} />
-                              <span className={`text-[9px] font-bold uppercase ${project ? 'text-indigo-600' : 'text-slate-300'}`}>
+                            <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
+                              <BriefcaseIcon className={project ? 'text-indigo-300' : 'text-white/50'} />
+                              <span className={`text-[9px] font-bold uppercase ${project ? 'text-indigo-200' : 'text-white/60'}`}>
                                 {project ? project.name : 'Project'}
                               </span>
                             </button>
@@ -580,9 +647,9 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                           {/* SubProject picker */}
                           {task.projectId && (
                             <HoverDropdown width="w-44" trigger={
-                              <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-black/5 px-2 py-0.5 rounded-md border border-dashed border-slate-200">
-                                <BriefcaseIcon className={subProject ? 'text-violet-500' : 'text-slate-300'} />
-                                <span className={`text-[9px] font-bold uppercase ${subProject ? 'text-violet-600' : 'text-slate-300'}`}>
+                              <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
+                                <BriefcaseIcon className={subProject ? 'text-violet-300' : 'text-white/50'} />
+                                <span className={`text-[9px] font-bold uppercase ${subProject ? 'text-violet-200' : 'text-white/60'}`}>
                                   {subProject ? subProject.name : 'Phase'}
                                 </span>
                               </button>
@@ -602,7 +669,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                           {/* Dependency badge */}
                           {depTask && (
-                            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[8px] font-bold uppercase ${depDone ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`} title={depDone ? `✅ "${depTask.title}" is done` : `🚫 Blocked — "${depTask.title}" not done yet`}>
+                            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[8px] font-bold uppercase ${depDone ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`} title={depDone ? `✅ "${depTask.title}" is done` : `🚫 Blocked — "${depTask.title}" not done yet`}>
                               {depDone ? '✅' : '🔒'} {depTask.title?.substring(0, 20) || 'Task'}
                             </span>
                           )}
@@ -610,9 +677,9 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                           {/* Dependency linker (manager or task owner) */}
                           {canEditTask && (
                             <HoverDropdown align="right" width="w-52" trigger={
-                              <button className={`flex items-center gap-1 hover:bg-black/5 px-2 py-0.5 rounded-md border border-dashed border-slate-200 ${task.dependsOn ? 'border-amber-200' : ''}`}>
-                                <LinkIcon className={task.dependsOn ? 'text-amber-500' : 'text-slate-300'} />
-                                <span className={`text-[9px] font-bold uppercase ${task.dependsOn ? 'text-amber-600' : 'text-slate-300'}`}>
+                              <button className={`flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30 ${task.dependsOn ? 'border-amber-300/50' : ''}`}>
+                                <LinkIcon className={task.dependsOn ? 'text-amber-300' : 'text-white/50'} />
+                                <span className={`text-[9px] font-bold uppercase ${task.dependsOn ? 'text-amber-200' : 'text-white/60'}`}>
                                   {task.dependsOn ? 'Linked' : 'Link'}
                                 </span>
                               </button>
@@ -652,17 +719,17 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                           {/* Assignee picker (manager only, requires project) */}
                           {isManager && !task.projectId ? (
-                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md opacity-40 cursor-not-allowed" title="Select a project first">
-                              <UserIcon className="text-slate-300" />
-                              <span className="text-[9px] font-bold uppercase text-slate-300">Project first</span>
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md opacity-50 cursor-not-allowed" title="Select a project first">
+                              <UserIcon className="text-white/50" />
+                              <span className="text-[9px] font-bold uppercase text-white/50">Project first</span>
                             </span>
                           ) : (
                             <HoverDropdown width="w-40" trigger={
-                              <button disabled={!isManager} className="flex items-center gap-1.5 hover:bg-black/5 px-2 py-0.5 rounded-md">
+                              <button disabled={!isManager} className="flex items-center gap-1.5 hover:bg-white/10 px-2 py-0.5 rounded-md">
                                 {assignee ? (
                                   <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold ${getUserColor(assignee.id, fullDb.users)}`}>{assignee.name[0]}</div>
-                                ) : <UserIcon className="text-slate-300" />}
-                                <span className={`text-[9px] font-bold uppercase ${assignee ? 'text-slate-500' : 'text-slate-300'}`}>
+                                ) : <UserIcon className="text-white/50" />}
+                                <span className={`text-[9px] font-bold uppercase ${assignee ? 'text-white/90' : 'text-white/60'}`}>
                                   {assignee ? assignee.name : 'Assign'}
                                 </span>
                               </button>
@@ -685,9 +752,9 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                           )}
 
                           {/* Move task */}
-                          {canEditTask && (
+                          {canMoveTask && (
                             <HoverDropdown align="right" width="w-40" trigger={
-                              <button className="flex items-center gap-1.5 hover:bg-black/5 px-2 py-0.5 rounded-md text-slate-300 hover:text-indigo-500">
+                              <button className="flex items-center gap-1.5 hover:bg-white/10 px-2 py-0.5 rounded-md text-white/60 hover:text-indigo-300 transition-colors">
                                 <ArrowRightLeftIcon /> <span className="text-[9px] font-bold uppercase">Move</span>
                               </button>
                             }>
@@ -701,7 +768,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                           {/* Locked indicator */}
                           {!canEditTask && (
-                            <div className="flex items-center gap-1 px-1 opacity-40 grayscale" title="Manager-assigned task. Read-only.">
+                            <div className="flex items-center gap-1 px-1 opacity-50 grayscale text-white/50" title="Manager-assigned task. Read-only.">
                               <LockIcon /> <span className="text-[7px] font-bold uppercase">Locked</span>
                             </div>
                           )}
@@ -710,7 +777,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                       {/* Delete task */}
                       {canEditTask && (
-                        <button onClick={() => handleDeleteTask(day.id, task.id)} className="opacity-0 group-hover/task:opacity-100 p-1 text-slate-300 hover:text-red-400 transition-opacity">
+                        <button onClick={() => handleDeleteTask(day.id, task.id)} className="opacity-0 group-hover/task:opacity-100 p-1 text-white/40 hover:text-red-400 transition-opacity">
                           <XIcon />
                         </button>
                       )}
@@ -722,7 +789,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
               {/* Add task button */}
               <button
                 onClick={() => handleAddTask(day.id)}
-                className="mt-8 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-indigo-400 hover:text-indigo-600 transition-all py-2.5 px-4 rounded-xl bg-indigo-50/30 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 w-full justify-center"
+                className="mt-8 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-indigo-300 hover:text-indigo-200 transition-all py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/20 w-full justify-center"
               >
                 <PlusIcon /> Create Task
               </button>
@@ -809,6 +876,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
         </div>
       )}
       {ConfirmModal}
+    </div>
     </div>
   );
 }

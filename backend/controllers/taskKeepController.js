@@ -29,40 +29,73 @@ async function getTeamUserIds(userId) {
 // GET /api/taskKeep — get all task days visible to this user
 export const getAllDays = async (req, res) => {
   const teamIds = await getTeamUserIds(req.user.userId);
-  // A user can see days they manage OR days that contain tasks assigned to them
+  let managerIds = [...teamIds];
+  
+  // Always check DB for user's manager
+  const currentUser = await User.findById(req.user.userId);
+  if (currentUser && currentUser.reportsTo) {
+    managerIds.push(currentUser.reportsTo.toString());
+  }
+
+  // A user can see days they manage (or their manager manages) OR days that contain tasks assigned to them
   const days = await TaskDay.find({
     $or: [
-      { managerId: { $in: teamIds } },
+      { managerId: { $in: managerIds } },
       { 'tasks.assigneeId': req.user.userId },
     ]
   }).sort({ date: -1 });
   res.json(days);
 };
 
-// POST /api/taskKeep — create a new date card (manager only)
+// POST /api/taskKeep — create a new date card
 export const createDay = async (req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'Date is required' });
 
-  // Check if day already exists for this manager
-  const existing = await TaskDay.findOne({ date, managerId: req.user.userId });
-  if (existing) return res.status(409).json({ error: 'A card for this date already exists' });
+  // Always check DB to find the user's manager via reportsTo
+  const currentUser = await User.findById(req.user.userId);
+  let managerId = req.user.userId;
+  if (currentUser && currentUser.reportsTo) {
+    managerId = currentUser.reportsTo;
+  }
 
-  const day = await TaskDay.create({ date, managerId: req.user.userId, tasks: [] });
+  // Check if day already exists for this manager
+  let existing = await TaskDay.findOne({ date, managerId });
+  if (existing) {
+    // If the card already exists (manager or another reportee created it),
+    // just return it so the user can add tasks to it
+    if (managerId.toString() !== req.user.userId) {
+       return res.status(200).json(existing);
+    }
+    return res.status(409).json({ error: 'A card for this date already exists' });
+  }
+
+  const day = await TaskDay.create({ date, managerId, tasks: [] });
   res.status(201).json(day);
 };
 
-// PUT /api/taskKeep/:dayId — update date card's date (manager only)
+// PUT /api/taskKeep/:dayId — update date card's date
 export const updateDay = async (req, res) => {
   const day = await TaskDay.findById(req.params.dayId);
   if (!day) return res.status(404).json({ error: 'Day not found' });
-  if (day.managerId.toString() !== req.user.userId) {
-    return res.status(403).json({ error: 'Only the manager who created this card can update it' });
+  
+  let hasAccess = false;
+  if (day.managerId.toString() === req.user.userId) {
+    hasAccess = true;
+  } else {
+    const currentUser = await User.findById(req.user.userId);
+    if (currentUser && currentUser.reportsTo && currentUser.reportsTo.toString() === day.managerId.toString()) {
+      hasAccess = true;
+    }
+  }
+
+  if (!hasAccess) {
+    return res.status(403).json({ error: 'Not authorized to update this card' });
   }
 
   const { date } = req.body;
   if (date) {
-    const existing = await TaskDay.findOne({ date, managerId: req.user.userId, _id: { $ne: day._id } });
+    const existing = await TaskDay.findOne({ date, managerId: day.managerId, _id: { $ne: day._id } });
     if (existing) return res.status(409).json({ error: 'A card for this date already exists' });
     day.date = date;
   }
@@ -70,13 +103,25 @@ export const updateDay = async (req, res) => {
   res.json(day);
 };
 
-// DELETE /api/taskKeep/:dayId — delete a date card (manager only)
+// DELETE /api/taskKeep/:dayId — delete a date card
 export const deleteDay = async (req, res) => {
   const day = await TaskDay.findById(req.params.dayId);
   if (!day) return res.status(404).json({ error: 'Day not found' });
-  if (day.managerId.toString() !== req.user.userId) {
-    return res.status(403).json({ error: 'Only the manager who created this card can delete it' });
+  
+  let hasAccess = false;
+  if (day.managerId.toString() === req.user.userId) {
+    hasAccess = true;
+  } else {
+    const currentUser = await User.findById(req.user.userId);
+    if (currentUser && currentUser.reportsTo && currentUser.reportsTo.toString() === day.managerId.toString()) {
+      hasAccess = true;
+    }
   }
+
+  if (!hasAccess) {
+    return res.status(403).json({ error: 'Not authorized to delete this card' });
+  }
+  
   await TaskDay.findByIdAndDelete(req.params.dayId);
   res.json({ message: 'Day deleted successfully' });
 };

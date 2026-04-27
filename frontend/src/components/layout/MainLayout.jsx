@@ -146,6 +146,22 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
           </div>
         </header>
 
+        {/* Global setup reminder — shown on all tabs */}
+        <div
+          className="shrink-0 border-b border-amber-200/80 bg-amber-50/95 px-3 py-2.5 md:px-8 backdrop-blur-sm"
+          role="status"
+        >
+          <div className="max-w-10xl mx-auto flex items-start gap-2 md:gap-3">
+            <span className="mt-0.5 shrink-0 text-amber-600" aria-hidden>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+            </span>
+            <p className="text-xs md:text-sm text-amber-900/90 leading-relaxed">
+              <span className="font-semibold">Before you add timesheet or TaskKeep entries:</span>{' '}
+              please complete <span className="font-medium">projects</span>, <span className="font-medium">subprojects</span>, <span className="font-medium">tasks</span>, <span className="font-medium">team members</span>, and <span className="font-medium">stakeholder</span> (and company) details in the <span className="font-semibold">Configuration</span> tab.
+            </p>
+          </div>
+        </div>
+
         {/* Content Area */}
         <div className="p-2 md:p-8 space-y-8 max-w-10xl mx-auto">
           {children}

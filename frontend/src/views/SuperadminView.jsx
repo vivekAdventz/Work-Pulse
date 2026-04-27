@@ -112,6 +112,20 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
           <button onClick={onLogout} className="px-4 py-2 text-sm font-semibold text-white bg-sky-500 rounded-xl shadow-sm hover:bg-sky-600 transition-colors">Logout</button>
         </div>
       </header>
+      <div
+        className="border-b border-amber-200/80 bg-amber-50/95 px-4 py-2.5 md:px-8"
+        role="status"
+      >
+        <div className="max-w-7xl mx-auto flex items-start gap-2 md:gap-3">
+          <span className="mt-0.5 shrink-0 text-amber-600" aria-hidden>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+          </span>
+          <p className="text-xs md:text-sm text-amber-900/90 leading-relaxed">
+            <span className="font-semibold">Before end users add entries:</span>{' '}
+            ask them to complete <span className="font-medium">projects</span>, <span className="font-medium">subprojects</span>, <span className="font-medium">tasks</span>, <span className="font-medium">team members</span>, and <span className="font-medium">stakeholder</span> (and company) details in the <span className="font-semibold">Configuration</span> tab in the app.
+          </p>
+        </div>
+      </div>
       <main className="p-4 md:p-8 max-w-7xl mx-auto">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
