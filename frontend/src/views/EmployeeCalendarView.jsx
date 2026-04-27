@@ -188,7 +188,7 @@ export default function EmployeeCalendarView({ entries, fullDb, currentUser, onE
               {selectedEntry.description && (
                 <div className="pt-4 border-t border-slate-100">
                   <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Description</span>
-                  <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200 prose prose-sm prose-slate max-w-none shadow-inner text-[13px]"
+                  <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200 prose prose-sm prose-slate max-w-none shadow-inner text-[13px] max-h-24 overflow-y-auto overflow-x-hidden break-words [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full"
                     dangerouslySetInnerHTML={{ __html: marked.parse(selectedEntry.description) }}
                   />
                 </div>

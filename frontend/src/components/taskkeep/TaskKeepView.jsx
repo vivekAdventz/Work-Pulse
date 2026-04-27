@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import api from '../../api';
 import AIPlannerModal from './AIPlannerModal';
+import { useConfirm } from '../common/useConfirm';
 
 // ─── Status Configuration ─────────────────────────────
 const STATUS_CONFIG = {
@@ -111,6 +112,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
   const [days, setDays] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dayToDelete, setDayToDelete] = useState(null);
+  const { ConfirmModal, confirm } = useConfirm();
   const [viewingAsUser, setViewingAsUser] = useState(null); // null = manager view (all tasks)
   const [showPlanner, setShowPlanner] = useState(false);
   const [noteToEdit, setNoteToEdit] = useState(null); // { dayId, taskId, description }
@@ -298,6 +300,8 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
   };
 
   const handleDeleteTask = async (dayId, taskId) => {
+    const ok = await confirm('This task will be permanently deleted.', { title: 'Delete Task' });
+    if (!ok) return;
     try {
       const updated = await api.deleteTaskFromDay(dayId, taskId);
       setDays(prev => prev.map(d => d.id === dayId ? updated : d));
@@ -804,6 +808,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
           </div>
         </div>
       )}
+      {ConfirmModal}
     </div>
   );
 }

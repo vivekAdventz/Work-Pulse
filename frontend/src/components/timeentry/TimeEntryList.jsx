@@ -1,6 +1,13 @@
 import { EditIcon, DeleteIcon, EmptyIcon } from '../common/Icons';
+import { useConfirm } from '../common/useConfirm';
 
 export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry, onEditEntry, readOnly = false, currentUserId }) {
+  const { ConfirmModal, confirm } = useConfirm();
+
+  const handleDelete = async (id) => {
+    const ok = await confirm('This time entry will be permanently deleted.', { title: 'Delete Time Entry' });
+    if (ok) onDeleteEntry(id);
+  };
   if (entries.length === 0) {
     return (
       <div className="text-center py-12 px-6 border-2 border-dashed border-slate-200 rounded-lg">
@@ -33,6 +40,7 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
   if (!readOnly) headers.push('Actions');
 
   return (
+    <>
     <div className="overflow-x-auto">
       <table className="min-w-full">
         <thead className="bg-slate-50">
@@ -85,7 +93,7 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
                         <button onClick={() => onEditEntry(entry)} className="text-slate-500 hover:text-sky-600 p-1 transition-colors" aria-label="Edit entry">
                           <EditIcon />
                         </button>
-                        <button onClick={() => onDeleteEntry(entry.id)} className="text-slate-500 hover:text-red-600 p-1 transition-colors" aria-label="Delete entry">
+                        <button onClick={() => handleDelete(entry.id)} className="text-slate-500 hover:text-red-600 p-1 transition-colors" aria-label="Delete entry">
                           <DeleteIcon />
                         </button>
                       </>
@@ -98,5 +106,7 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
         </tbody>
       </table>
     </div>
+    {ConfirmModal}
+    </>
   );
 }

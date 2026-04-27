@@ -7,9 +7,7 @@ import TimeEntryForm from '../components/timeentry/TimeEntryForm';
 import TimerModal from '../components/modals/TimerModal';
 import ReportModal from '../components/modals/ReportModal';
 import ConfigManager from '../components/config/ConfigManager';
-import SubProjectConfig from '../components/config/SubProjectConfig';
 import ProjectConfig from '../components/config/ProjectConfig';
-import TaskConfig from '../components/config/TaskConfig';
 import AiFillModal from '../components/modals/AiFillModal';
 import Toast, { useToast } from '../components/common/Toast';
 import { PlusIcon, PlayIcon, CalendarIcon, TableIcon, AiWandIcon } from '../components/common/Icons';
@@ -149,7 +147,6 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       else if (key === 'projects') setProjects(p => [...p, newItem]);
       else if (key === 'subProjects') setSubProjects(p => [...p, newItem]);
       else if (key === 'tasks') setTasks(p => [...p, newItem]);
-      else if (key === 'teamMembers') setTeamMembers(p => [...p, newItem]);
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} added successfully.`, 'success');
     } catch (error) {
       showToast(`Failed to add item: ${error.message}`, 'error');
@@ -163,7 +160,6 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
     else if (key === 'projects') list = projects;
     else if (key === 'subProjects') list = subProjects;
     else if (key === 'tasks') list = tasks;
-    else if (key === 'teamMembers') list = teamMembers;
 
     const item = list.find(i => i.id === id);
     if (!item) return;
@@ -183,7 +179,6 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       else if (key === 'projects') setProjects(p => p.filter(i => i.id !== id));
       else if (key === 'subProjects') setSubProjects(p => p.filter(i => i.id !== id));
       else if (key === 'tasks') setTasks(p => p.filter(i => i.id !== id));
-      else if (key === 'teamMembers') setTeamMembers(p => p.filter(i => i.id !== id));
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} deleted.`, 'info');
     } catch (error) {
       showToast(`Failed to delete item: ${error.message}`, 'error');
@@ -195,7 +190,6 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       const updatedItem = await api.updateItem(key, id, { name: newName });
       if (key === 'companies') setCompanies(p => p.map(i => i.id === id ? updatedItem : i));
       else if (key === 'stakeholders') setStakeholders(p => p.map(i => i.id === id ? updatedItem : i));
-      else if (key === 'teamMembers') setTeamMembers(p => p.map(i => i.id === id ? updatedItem : i));
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} updated successfully.`, 'success');
     } catch (error) {
       showToast(`Failed to update item: ${error.message}`, 'error');
@@ -219,6 +213,69 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       showToast('Project added successfully.', 'success');
     } catch (error) {
       showToast(`Failed to add project: ${error.message}`, 'error');
+    }
+  };
+
+  // Comprehensive save used by ProjectModal: handles project + all its subprojects + tasks in one shot.
+  const handleSaveProject = async (projectData, localSubProjects, existingProjectId) => {
+    let projectId = existingProjectId;
+    try {
+      if (existingProjectId) {
+        const updated = await api.updateItem('projects', existingProjectId, projectData);
+        setProjects(prev => prev.map(p => p.id === existingProjectId ? updated : p));
+      } else {
+        const newProject = await api.addItem('projects', { ...projectData, createdBy: user.id });
+        setProjects(prev => [...prev, newProject]);
+        projectId = newProject.id;
+      }
+
+      for (const sp of localSubProjects) {
+        if (sp._deleted) {
+          if (sp.id) {
+            // Delete tasks for this subproject first
+            const spTasks = tasks.filter(t => t.subProjectId === sp.id);
+            for (const t of spTasks) {
+              await api.deleteItem('tasks', t.id);
+            }
+            setTasks(prev => prev.filter(t => t.subProjectId !== sp.id));
+            await api.deleteItem('subProjects', sp.id);
+            setSubProjects(prev => prev.filter(s => s.id !== sp.id));
+          }
+          continue;
+        }
+
+        let spId = sp.id;
+        if (sp.id) {
+          const updated = await api.updateItem('subProjects', sp.id, { name: sp.name, description: sp.description });
+          setSubProjects(prev => prev.map(s => s.id === sp.id ? updated : s));
+        } else {
+          const newSp = await api.addItem('subProjects', { name: sp.name, description: sp.description, projectId, createdBy: user.id });
+          setSubProjects(prev => [...prev, newSp]);
+          spId = newSp.id;
+        }
+
+        for (const task of sp.tasks) {
+          if (task._deleted) {
+            if (task.id) {
+              await api.deleteItem('tasks', task.id);
+              setTasks(prev => prev.filter(t => t.id !== task.id));
+            }
+            continue;
+          }
+          if (task.id) {
+            const updated = await api.updateItem('tasks', task.id, { name: task.name, description: task.description });
+            setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+          } else {
+            const newTask = await api.addItem('tasks', { name: task.name, description: task.description, subProjectId: spId, createdBy: user.id });
+            setTasks(prev => [...prev, newTask]);
+          }
+        }
+      }
+
+      showToast(existingProjectId ? 'Project updated.' : 'Project created.', 'success');
+    } catch (error) {
+      showToast(`Failed to save project: ${error.message}`, 'error');
+      throw error;
     }
   };
 
@@ -279,13 +336,13 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
   const userActivityTypes = activityTypes;
 
   const userTeamMembers = useMemo(() => {
-    const customTeammates = teamMembers;
-    const realUsersAsTeammates = users
-      .filter(u => u.id !== user.id)
+    const currentUserInList = users.find(u => u.id === user.id);
+    const managerId = currentUserInList?.reportsTo;
+    if (!managerId) return [];
+    return users
+      .filter(u => u.id !== user.id && u.reportsTo === managerId)
       .map(u => ({ id: u.id, name: u.name, isRealUser: true }));
-
-    return [...customTeammates, ...realUsersAsTeammates];
-  }, [teamMembers, users, user.id]);
+  }, [users, user.id]);
 
   // Create a local `fullDb` object to pass down to children components 
   // so they don't break until they are also refactored to fetch their own data.
@@ -546,23 +603,20 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
           </div>
 
           {/* Active Projects */}
-          <ProjectConfig projects={userProjects} companies={userCompanies} onAdd={handleAddProject} onDelete={handleDeleteItem('projects')} onUpdate={handleUpdateProject} />
-
-          {/* Project Scope | , Stakeholders, Team Members */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
-            <div className="lg:col-span-4">
-              <SubProjectConfig projects={userProjects} subProjects={userSubProjects} onAdd={handleAddSubProject} onDelete={handleDeleteItem('subProjects')} />
-            </div>
-            <div className="lg:col-span-8">
-              <TaskConfig projects={userProjects} subProjects={userSubProjects} tasks={userTasks} onAdd={handleAddTask} onDelete={handleDeleteItem('tasks')} />
-            </div>
-          </div>
+          <ProjectConfig
+            projects={userProjects}
+            companies={userCompanies}
+            subProjects={userSubProjects}
+            tasks={userTasks}
+            onSave={handleSaveProject}
+            onDelete={handleDeleteItem('projects')}
+          />
           
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
             <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               <ConfigManager title="Companies" items={userCompanies} onAdd={handleAddItem('companies', user.id)} onDelete={handleDeleteItem('companies')} onUpdate={handleUpdateItem('companies')} />
               <ConfigManager title="Stakeholders" items={userStakeholders} onAdd={handleAddItem('stakeholders', user.id)} onDelete={handleDeleteItem('stakeholders')} onUpdate={handleUpdateItem('stakeholders')} />
-              <ConfigManager title="Team Members" items={userTeamMembers} onAdd={handleAddItem('teamMembers', user.id)} onDelete={handleDeleteItem('teamMembers')} onUpdate={handleUpdateItem('teamMembers')} />
+              <ConfigManager title="Team Members" items={userTeamMembers} readOnly />
             </div>
           </div>
 

@@ -93,7 +93,7 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
 
             {/* Right-side actions */}
             <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
-              {onGenerateSummary && (
+              {onGenerateSummary && activeView !== 'config' && (
                 <button
                   onClick={onGenerateSummary}
                   className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white p-2 md:px-4 md:py-2 rounded-lg text-sm font-medium transition-all shadow-md shadow-indigo-100"
@@ -104,7 +104,7 @@ export default function MainLayout({ user, onLogout, children, activeView = 'das
                 </button>
               )}
 
-              {onDownloadCsv && (
+              {onDownloadCsv && activeView !== 'config' && (
                 <button
                   onClick={onDownloadCsv}
                   className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 p-2 md:px-4 md:py-2 rounded-lg text-sm font-medium transition-all shadow-sm"

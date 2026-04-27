@@ -2,9 +2,11 @@ import { useState } from 'react';
 import api from '../api';
 import { PlusIcon, EditIcon, DeleteIcon } from '../components/common/Icons';
 import Toast, { useToast } from '../components/common/Toast';
+import { useConfirm } from '../components/common/useConfirm';
 
 export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
   const { toasts, showToast, removeToast } = useToast();
+  const { ConfirmModal, confirm } = useConfirm();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const initialFormData = { name: '', email: '', roles: ['Employee'], reportsTo: '' };
@@ -38,14 +40,18 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
   };
 
   const handleDeleteClick = async (userId) => {
-    if (window.confirm('Are you sure you want to completely delete this user and all associated records? This action cannot be undone.')) {
-      try {
-        await api.deleteItem('users', userId);
-        setUsers(allUsers.filter((u) => u.id !== userId));
-        showToast('User deleted successfully.', 'info');
-      } catch (error) {
-        showToast(`Failed to delete user: ${error.message}`, 'error');
-      }
+    const userToDelete = allUsers.find((u) => u.id === userId);
+    const ok = await confirm(
+      `"${userToDelete?.name}" and all their associated records will be permanently deleted. This cannot be undone.`,
+      { title: 'Delete User' }
+    );
+    if (!ok) return;
+    try {
+      await api.deleteItem('users', userId);
+      setUsers(allUsers.filter((u) => u.id !== userId));
+      showToast('User deleted successfully.', 'info');
+    } catch (error) {
+      showToast(`Failed to delete user: ${error.message}`, 'error');
     }
   };
 
@@ -219,6 +225,7 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
         </div>
       </main>
       <Toast toasts={toasts} onRemove={removeToast} />
+      {ConfirmModal}
     </div>
   );
 }

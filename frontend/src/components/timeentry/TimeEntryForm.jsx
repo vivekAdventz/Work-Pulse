@@ -74,12 +74,10 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
   const userProjects = useMemo(() => fullDb.projects.filter((p) => teamUserIds.includes(p.createdBy)), [fullDb.projects, teamUserIds]);
   const userActivityTypes = useMemo(() => fullDb.activityTypes, [fullDb.activityTypes]);
   const userTeamMembers = useMemo(() => {
-    const customTeammates = fullDb.teamMembers.filter((i) => teamUserIds.includes(i.createdBy));
-    const realUsersAsTeammates = fullDb.users
+    return fullDb.users
       .filter(u => teamUserIds.includes(u.id) && u.id !== userId)
       .map(u => ({ id: u.id, name: u.name, isRealUser: true }));
-    return [...customTeammates, ...realUsersAsTeammates];
-  }, [fullDb.teamMembers, fullDb.users, teamUserIds, userId]);
+  }, [fullDb.users, teamUserIds, userId]);
   const availableSubProjects = useMemo(
     () => fullDb.subProjects.filter((sp) => sp.projectId === projectId && teamUserIds.includes(sp.createdBy)),
     [fullDb.subProjects, projectId, teamUserIds]
