@@ -2,17 +2,17 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import api from '../api';
 import MainLayout from '../components/layout/MainLayout';
 import TimeEntryList from '../components/timeentry/TimeEntryList';
-import EmployeeCardView from '../components/timeentry/EmployeeCardView';
+import EmployeeCalendarView from './EmployeeCalendarView';
 import TimeEntryForm from '../components/timeentry/TimeEntryForm';
 import TimerModal from '../components/modals/TimerModal';
 import ReportModal from '../components/modals/ReportModal';
 import ConfigManager from '../components/config/ConfigManager';
-import SubProjectConfig from '../components/config/SubProjectConfig';
 import ProjectConfig from '../components/config/ProjectConfig';
 import AiFillModal from '../components/modals/AiFillModal';
 import Toast, { useToast } from '../components/common/Toast';
-import { PlusIcon, PlayIcon, GridIcon, TableIcon, AiWandIcon } from '../components/common/Icons';
+import { PlusIcon, PlayIcon, CalendarIcon, TableIcon, AiWandIcon } from '../components/common/Icons';
 import TaskKeepView from '../components/taskkeep/TaskKeepView';
+import { formatActivities, entryMatchesActivityFilter } from '../utils/timeEntryActivities';
 
 export default function EmployeeView({ user, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
   const { toasts, showToast, removeToast } = useToast();
@@ -24,6 +24,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
   const [stakeholders, setStakeholders] = useState([]);
   const [projects, setProjects] = useState([]);
   const [subProjects, setSubProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [activityTypes, setActivityTypes] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
@@ -60,6 +61,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       setStakeholders(db.stakeholders || []);
       setProjects(db.projects || []);
       setSubProjects(db.subProjects || []);
+      setTasks(db.tasks || []);
       setActivityTypes(db.activityTypes || []);
       setTeamMembers(db.teamMembers || []);
     } catch (err) {
@@ -73,7 +75,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
     loadData();
   }, [loadData]);
 
-  const getCurrentTime = () => new Date().toTimeString().slice(0, 8);
+  const getCurrentTime = () => new Date().toTimeString().slice(0, 5);
 
   const handleSaveEntry = async (entryData) => {
     try {
@@ -145,7 +147,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       else if (key === 'stakeholders') setStakeholders(p => [...p, newItem]);
       else if (key === 'projects') setProjects(p => [...p, newItem]);
       else if (key === 'subProjects') setSubProjects(p => [...p, newItem]);
-      else if (key === 'teamMembers') setTeamMembers(p => [...p, newItem]);
+      else if (key === 'tasks') setTasks(p => [...p, newItem]);
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} added successfully.`, 'success');
     } catch (error) {
       showToast(`Failed to add item: ${error.message}`, 'error');
@@ -158,7 +160,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
     else if (key === 'stakeholders') list = stakeholders;
     else if (key === 'projects') list = projects;
     else if (key === 'subProjects') list = subProjects;
-    else if (key === 'teamMembers') list = teamMembers;
+    else if (key === 'tasks') list = tasks;
 
     const item = list.find(i => i.id === id);
     if (!item) return;
@@ -177,7 +179,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       else if (key === 'stakeholders') setStakeholders(p => p.filter(i => i.id !== id));
       else if (key === 'projects') setProjects(p => p.filter(i => i.id !== id));
       else if (key === 'subProjects') setSubProjects(p => p.filter(i => i.id !== id));
-      else if (key === 'teamMembers') setTeamMembers(p => p.filter(i => i.id !== id));
+      else if (key === 'tasks') setTasks(p => p.filter(i => i.id !== id));
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} deleted.`, 'info');
     } catch (error) {
       showToast(`Failed to delete item: ${error.message}`, 'error');
@@ -189,7 +191,6 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       const updatedItem = await api.updateItem(key, id, { name: newName });
       if (key === 'companies') setCompanies(p => p.map(i => i.id === id ? updatedItem : i));
       else if (key === 'stakeholders') setStakeholders(p => p.map(i => i.id === id ? updatedItem : i));
-      else if (key === 'teamMembers') setTeamMembers(p => p.map(i => i.id === id ? updatedItem : i));
       showToast(`${key.slice(0, -1).replace(/([A-Z])/g, ' $1').trim()} updated successfully.`, 'success');
     } catch (error) {
       showToast(`Failed to update item: ${error.message}`, 'error');
@@ -216,6 +217,69 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
     }
   };
 
+  // Comprehensive save used by ProjectModal: handles project + all its subprojects + tasks in one shot.
+  const handleSaveProject = async (projectData, localSubProjects, existingProjectId) => {
+    let projectId = existingProjectId;
+    try {
+      if (existingProjectId) {
+        const updated = await api.updateItem('projects', existingProjectId, projectData);
+        setProjects(prev => prev.map(p => p.id === existingProjectId ? updated : p));
+      } else {
+        const newProject = await api.addItem('projects', { ...projectData, createdBy: user.id });
+        setProjects(prev => [...prev, newProject]);
+        projectId = newProject.id;
+      }
+
+      for (const sp of localSubProjects) {
+        if (sp._deleted) {
+          if (sp.id) {
+            // Delete tasks for this subproject first
+            const spTasks = tasks.filter(t => t.subProjectId === sp.id);
+            for (const t of spTasks) {
+              await api.deleteItem('tasks', t.id);
+            }
+            setTasks(prev => prev.filter(t => t.subProjectId !== sp.id));
+            await api.deleteItem('subProjects', sp.id);
+            setSubProjects(prev => prev.filter(s => s.id !== sp.id));
+          }
+          continue;
+        }
+
+        let spId = sp.id;
+        if (sp.id) {
+          const updated = await api.updateItem('subProjects', sp.id, { name: sp.name, description: sp.description });
+          setSubProjects(prev => prev.map(s => s.id === sp.id ? updated : s));
+        } else {
+          const newSp = await api.addItem('subProjects', { name: sp.name, description: sp.description, projectId, createdBy: user.id });
+          setSubProjects(prev => [...prev, newSp]);
+          spId = newSp.id;
+        }
+
+        for (const task of sp.tasks) {
+          if (task._deleted) {
+            if (task.id) {
+              await api.deleteItem('tasks', task.id);
+              setTasks(prev => prev.filter(t => t.id !== task.id));
+            }
+            continue;
+          }
+          if (task.id) {
+            const updated = await api.updateItem('tasks', task.id, { name: task.name, description: task.description });
+            setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+          } else {
+            const newTask = await api.addItem('tasks', { name: task.name, description: task.description, subProjectId: spId, createdBy: user.id });
+            setTasks(prev => [...prev, newTask]);
+          }
+        }
+      }
+
+      showToast(existingProjectId ? 'Project updated.' : 'Project created.', 'success');
+    } catch (error) {
+      showToast(`Failed to save project: ${error.message}`, 'error');
+      throw error;
+    }
+  };
+
   const handleAddSubProject = async (name, projectId) => {
     try {
       const newSubProject = await api.addItem('subProjects', { name, projectId, createdBy: user.id });
@@ -223,6 +287,16 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       showToast('Sub-project added successfully.', 'success');
     } catch (error) {
       showToast(`Failed to add sub-project: ${error.message}`, 'error');
+    }
+  };
+
+  const handleAddTask = async (name, subProjectId) => {
+    try {
+      const newTask = await api.addItem('tasks', { name, subProjectId, createdBy: user.id });
+      setTasks((prev) => [...prev, newTask]);
+      showToast('Task added successfully.', 'success');
+    } catch (error) {
+      showToast(`Failed to add task: ${error.message}`, 'error');
     }
   };
 
@@ -245,7 +319,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       const stakeholderProjectIds = projects.filter((p) => p.stakeholderId === stakeholderFilter).map((p) => p.id);
       entries = entries.filter((e) => stakeholderProjectIds.includes(e.projectId));
     }
-    if (activityFilter) entries = entries.filter((e) => e.activityTypeId === activityFilter);
+    if (activityFilter) entries = entries.filter((e) => entryMatchesActivityFilter(e, activityFilter));
     if (priorityFilter) entries = entries.filter((e) => e.priority === priorityFilter);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -259,53 +333,24 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
   const userStakeholders = stakeholders;
   const userProjects = projects;
   const userSubProjects = subProjects;
+  const userTasks = tasks;
   const userActivityTypes = activityTypes;
 
   const userTeamMembers = useMemo(() => {
-    const customTeammates = teamMembers;
-    const realUsersAsTeammates = users
-      .filter(u => u.id !== user.id)
+    const currentUserInList = users.find(u => u.id === user.id);
+    const managerId = currentUserInList?.reportsTo;
+    if (!managerId) return [];
+    return users
+      .filter(u => u.id !== user.id && u.reportsTo === managerId)
       .map(u => ({ id: u.id, name: u.name, isRealUser: true }));
-
-    return [...customTeammates, ...realUsersAsTeammates];
-  }, [teamMembers, users, user.id]);
+  }, [users, user.id]);
 
   // Create a local `fullDb` object to pass down to children components 
   // so they don't break until they are also refactored to fetch their own data.
-  const localDb = { users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers };
+  const localDb = { users, timeEntries, companies, stakeholders, projects, subProjects, tasks: userTasks, activityTypes, teamMembers };
 
-  const handleAiFill = async ({ projectName, companyNames, subProjects, purpose }) => {
-    // 1. Create or reuse companies
-    const companyIds = [];
-    for (const name of companyNames) {
-      let company = userCompanies.find((c) => c.name.toLowerCase() === name.toLowerCase());
-      if (!company) {
-        company = await api.addItem('companies', { name, createdBy: user.id });
-        setFullDb((prev) => ({ ...prev, companies: [...prev.companies, company] }));
-      }
-      companyIds.push(company.id || company._id);
-    }
-
-    // 2. Create project
-    const newProject = await api.addItem('projects', {
-      name: projectName,
-      companyIds,
-      purpose,
-      createdBy: user.id,
-    });
-    setProjects((prev) => [...prev, newProject]);
-
-    // 4. Create sub-projects sequentially
-    const projectId = newProject.id || newProject._id;
-    const createdSubProjects = [];
-    for (const spName of subProjects) {
-      const sp = await api.addItem('subProjects', { name: spName, projectId, createdBy: user.id });
-      createdSubProjects.push(sp);
-    }
-    if (createdSubProjects.length > 0) {
-      setSubProjects((prev) => [...prev, ...createdSubProjects]);
-    }
-    showToast(`Project "${projectName}" created with ${createdSubProjects.length} sub-projects.`, 'success');
+  const handleAiFill = async ({ projectData, localSubProjects }) => {
+    await handleSaveProject(projectData, localSubProjects, null);
   };
 
 
@@ -355,8 +400,8 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
         Hours: entry.hours.toFixed(2),
         Company: company?.name || 'N/A',
         Project: project?.name || 'N/A',
-        SubProject: subProjects.find((sp) => sp.id === entry.subProjectId)?.name || 'N/A',
-        Activity: activityTypes.find((a) => a.id === entry.activityTypeId)?.name || 'N/A',
+        SubProject: (entry.subProjectIds || (entry.subProjectId ? [entry.subProjectId] : [])).map(id => subProjects.find(sp => sp.id === id)?.name).filter(Boolean).join(', ') || 'N/A',
+        Activity: formatActivities(entry, activityTypes),
         Location: entry.workLocation,
         Priority: entry.priority,
         Description: entry.description,
@@ -394,7 +439,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
               <div className="flex items-center gap-2.5 flex-wrap">
                 <div className="flex items-center p-1 bg-slate-100 rounded-xl shadow-inner">
                   <button onClick={() => setDashboardViewMode('table')} className={`flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-all ${dashboardViewMode === 'table' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><TableIcon /> Table</button>
-                  <button onClick={() => setDashboardViewMode('card')} className={`flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-all ${dashboardViewMode === 'card' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><GridIcon /> Cards</button>
+                  <button onClick={() => setDashboardViewMode('calendar')} className={`flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-all ${dashboardViewMode === 'calendar' ? 'bg-white text-brand-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><CalendarIcon /> Calendar</button>
                 </div>
                 <button onClick={handleStartTimer} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-brand-green rounded-xl shadow-md shadow-brand-green/20 hover:bg-brand-green-dark hover:-translate-y-0.5 active:translate-y-0 transition-all">
                   <PlayIcon /> Start Timer
@@ -468,9 +513,9 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
 
               <TimeEntryList entries={userTimeEntries} allUsers={users} fullDb={localDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} currentUserId={user.id} />
             </>
-          ) : (
-            <EmployeeCardView projects={userProjects} subProjects={userSubProjects} timeEntries={userTimeEntries} allUsers={users} fullDb={localDb} onDeleteEntry={deleteTimeEntry} onEditEntry={handleEditEntry} currentUserId={user.id} />
-          )}
+          ) : dashboardViewMode === 'calendar' ? (
+            <EmployeeCalendarView entries={userTimeEntries} fullDb={localDb} currentUser={user} onEditEntry={handleEditEntry} />
+          ) : null}
         </div>
       </div>
       ) : activeView === 'taskkeep' ? (
@@ -529,22 +574,26 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
           </div>
 
           {/* Active Projects */}
-          <ProjectConfig projects={userProjects} companies={userCompanies} onAdd={handleAddProject} onDelete={handleDeleteItem('projects')} onUpdate={handleUpdateProject} />
-
-          {/* Project Scope | , Stakeholders, Team Members */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            <div className="lg:col-span-4">
-              <SubProjectConfig projects={userProjects} subProjects={userSubProjects} onAdd={handleAddSubProject} onDelete={handleDeleteItem('subProjects')} />
-            </div>
-            <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <ProjectConfig
+            projects={userProjects}
+            companies={userCompanies}
+            subProjects={userSubProjects}
+            tasks={userTasks}
+            onSave={handleSaveProject}
+            onDelete={handleDeleteItem('projects')}
+          />
+          
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
+            <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               <ConfigManager title="Companies" items={userCompanies} onAdd={handleAddItem('companies', user.id)} onDelete={handleDeleteItem('companies')} onUpdate={handleUpdateItem('companies')} />
               <ConfigManager title="Stakeholders" items={userStakeholders} onAdd={handleAddItem('stakeholders', user.id)} onDelete={handleDeleteItem('stakeholders')} onUpdate={handleUpdateItem('stakeholders')} />
-              <ConfigManager title="Team Members" items={userTeamMembers} onAdd={handleAddItem('teamMembers', user.id)} onDelete={handleDeleteItem('teamMembers')} onUpdate={handleUpdateItem('teamMembers')} />
+              <ConfigManager title="Team Members" items={userTeamMembers} readOnly />
             </div>
           </div>
 
         </div>
       )}
+      {isTimerOpen && <TimerModal onStop={handleStopTimer} />}
       {isFormOpen && (
         <TimeEntryForm
           userId={user.id}
@@ -565,8 +614,6 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
         <AiFillModal
           existingProjects={userProjects}
           companies={userCompanies}
-          stakeholders={userStakeholders}
-          user={user}
           onClose={() => setIsAiFillOpen(false)}
           onSave={handleAiFill}
         />

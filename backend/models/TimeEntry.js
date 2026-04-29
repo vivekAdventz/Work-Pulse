@@ -10,8 +10,17 @@ const timeEntrySchema = new mongoose.Schema({
   workLocation: { type: String, default: 'Office' },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
-  subProjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubProject' },
-  activityTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'ActivityType', required: true },
+  subProjectIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SubProject' }],
+  taskIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
+  activityTypeIds: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ActivityType' }],
+    validate: {
+      validator(v) {
+        return Array.isArray(v) && v.length > 0;
+      },
+      message: 'At least one activity type is required',
+    },
+  },
   teamMemberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'TeamMember' }],
   stakeholderIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Stakeholder' }],
   deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]

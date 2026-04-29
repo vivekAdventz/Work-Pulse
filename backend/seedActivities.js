@@ -1,5 +1,6 @@
 import User from './models/User.js';
 import ActivityType from './models/ActivityType.js';
+import ActivityTag from './models/ActivityTag.js';
 
 const activities = [
   'Meeting / Discussion',
@@ -25,11 +26,17 @@ async function seedActivities() {
     process.exit(1);
   }
 
+  let common = await ActivityTag.findOne({ slug: 'common' });
+  if (!common) {
+    common = await ActivityTag.create({ name: 'Common', slug: 'common', sortOrder: 0 });
+    console.log('Created ActivityTag "common".');
+  }
+
   let added = 0;
   for (const name of activities) {
     const exists = await ActivityType.findOne({ name });
     if (!exists) {
-      await ActivityType.create({ name, createdBy: admin._id });
+      await ActivityType.create({ name, tagId: common._id, createdBy: admin._id });
       added++;
     }
   }

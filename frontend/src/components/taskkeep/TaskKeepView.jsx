@@ -1,12 +1,26 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import api from '../../api';
 import AIPlannerModal from './AIPlannerModal';
+import { useConfirm } from '../common/useConfirm';
 
-// ─── Status Configuration ─────────────────────────────
+// ── Background slideshow images ──────────────────────────
+const BG_IMAGES = [
+  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80',
+  'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80',
+  'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1920&q=80',
+  'https://images.unsplash.com/photo-1470770903676-69b98201ea1c?w=1920&q=80',
+  'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=1920&q=80',
+  'https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=1920&q=80',
+  'https://images.unsplash.com/photo-1448375240586-882707db888b?w=1920&q=80',
+  'https://images.unsplash.com/photo-1418065460487-3e41a6c84dc5?w=1920&q=80',
+];
+const BG_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+// ─── Status styling (icons only — no status labels in UI) ──
 const STATUS_CONFIG = {
-  todo: { label: 'To Do', badgeCls: 'bg-slate-100 text-slate-500', dotCls: 'text-slate-300' },
-  doing: { label: 'In Progress', badgeCls: 'bg-blue-50 text-blue-600', dotCls: 'text-blue-500' },
-  done: { label: 'Done', badgeCls: 'bg-emerald-50 text-emerald-600', dotCls: 'text-emerald-500' },
+  todo: { dotCls: 'text-slate-300' },
+  doing: { dotCls: 'text-blue-500' },
+  done: { dotCls: 'text-emerald-500' },
 };
 
 // ─── Inline SVG Icons ──────────────────────────────────
@@ -33,6 +47,9 @@ const XIcon = ({ className }) => (
 );
 const BriefcaseIcon = ({ className }) => (
   <svg className={className} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" /></svg>
+);
+const ListChecksIcon = ({ className }) => (
+  <svg className={className} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" /></svg>
 );
 const UserIcon = ({ className }) => (
   <svg className={className} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
@@ -108,9 +125,25 @@ function HoverDropdown({ trigger, children, align = 'left', width = 'w-48' }) {
 // Main Component
 // ════════════════════════════════════════════════════════
 export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showToast, onOpenTimeEntryForm }) {
+  // ── Background slideshow ──────────────────────────────────
+  const [bgIndex, setBgIndex] = useState(0);
+  const [bgFading, setBgFading] = useState(false);
+  useEffect(() => {
+    if (BG_IMAGES.length <= 1) return;
+    const timer = setInterval(() => {
+      setBgFading(true);
+      setTimeout(() => {
+        setBgIndex(i => (i + 1) % BG_IMAGES.length);
+        setBgFading(false);
+      }, 800);
+    }, BG_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
+
   const [days, setDays] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dayToDelete, setDayToDelete] = useState(null);
+  const { ConfirmModal, confirm } = useConfirm();
   const [viewingAsUser, setViewingAsUser] = useState(null); // null = manager view (all tasks)
   const [showPlanner, setShowPlanner] = useState(false);
   const [noteToEdit, setNoteToEdit] = useState(null); // { dayId, taskId, description }
@@ -166,14 +199,36 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
   const filteredDays = useMemo(() => {
     const targetUserId = viewingAsUser || (isManager ? null : user.id);
     if (!targetUserId) return days; // Manager sees all
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
     return days
-      .map(d => ({ ...d, tasks: d.tasks.filter(t => t.assigneeId === targetUserId) }))
-      .filter(d => d.tasks.length > 0 || (isManager && !viewingAsUser));
+      .map(d => ({
+        ...d,
+        tasks: d.tasks.filter(t => {
+          const assignee = t.assigneeId?.toString();
+          const creator = t.createdBy?.toString();
+
+          if (viewingAsUser) {
+            // Manager viewing as employee: only show tasks assigned to that employee
+            // that were NOT self-created by the employee (i.e., manager-assigned only)
+            return assignee === targetUserId && creator !== targetUserId;
+          }
+
+          // Employee's own view: show tasks assigned to them or created by them
+          return assignee === targetUserId ||
+            (!assignee && creator === targetUserId);
+        }),
+      }))
+      .filter(d => {
+        if (viewingAsUser) return d.tasks.length > 0; // Manager viewing one reportee
+        if (isManager) return true; // Manager all-tasks view keeps empty day cards
+        return d.tasks.length > 0 || d.date >= todayStr; // Employee view
+      });
   }, [days, isManager, user.id, viewingAsUser]);
 
   // ── Day operations ──
   const handleAddDay = async () => {
-    if (!isManager) return;
     let nextDate = new Date().toISOString().split('T')[0];
     let offset = 0;
     while (days.some(d => d.date === nextDate)) {
@@ -183,7 +238,10 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
     }
     try {
       const newDay = await api.createTaskDay(nextDate);
-      setDays(prev => [newDay, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+      setDays(prev => {
+        if (prev.some(d => d.id === newDay.id)) return prev;
+        return [newDay, ...prev].sort((a, b) => b.date.localeCompare(a.date));
+      });
       showToast?.('Date card created.', 'success');
     } catch (err) {
       showToast?.(`Failed to create card: ${err.message}`, 'error');
@@ -191,7 +249,6 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
   };
 
   const handleUpdateDayDate = async (dayId, newDate) => {
-    if (!isManager) return;
     if (days.some(d => d.id !== dayId && d.date === newDate)) {
       showToast?.('A card for this date already exists.', 'warning'); return;
     }
@@ -242,6 +299,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
           date: day.date,
           projectId: task.projectId || '',
           subProjectId: task.subProjectId || '',
+          taskIds: task.catalogTaskId ? [task.catalogTaskId] : [],
           description: task.title || '',
           _taskKeepDayId: dayId,
           _taskKeepTaskId: taskId,
@@ -288,7 +346,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
       }
 
       // If we're updating status or project, a full refresh might be needed to maintain consistency
-      if (field === 'status' || field === 'projectId' || field === 'assigneeId') {
+      if (field === 'status' || field === 'projectId' || field === 'assigneeId' || field === 'subProjectId' || field === 'catalogTaskId') {
         loadDays();
       }
     } catch (err) {
@@ -297,7 +355,29 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
     }
   };
 
+  const patchKeepTask = async (dayId, taskId, patch) => {
+    setDays((prev) =>
+      prev.map((d) => {
+        if (d.id !== dayId) return d;
+        return {
+          ...d,
+          tasks: d.tasks.map((t) => (t.id === taskId ? { ...t, ...patch } : t)),
+        };
+      })
+    );
+    try {
+      const updated = await api.updateTaskInDay(dayId, taskId, patch);
+      setDays((prev) => prev.map((d) => (d.id === dayId ? updated : d)));
+      loadDays();
+    } catch (err) {
+      showToast?.(`Failed to update task: ${err.message}`, 'error');
+      loadDays();
+    }
+  };
+
   const handleDeleteTask = async (dayId, taskId) => {
+    const ok = await confirm('This task will be permanently deleted.', { title: 'Delete Task' });
+    if (!ok) return;
     try {
       const updated = await api.deleteTaskFromDay(dayId, taskId);
       setDays(prev => prev.map(d => d.id === dayId ? updated : d));
@@ -349,25 +429,40 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
   }
 
   return (
-    <div className="animate-fadeIn">
+    <div
+      className="relative -m-2 md:-m-8 p-2 md:p-8 min-h-[calc(100vh-84px)]"
+      style={{
+        backgroundImage: `url(${BG_IMAGES[bgIndex]})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+        transition: 'opacity 0.8s ease',
+        opacity: bgFading ? 0 : 1,
+      }}
+    >
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-black/30 pointer-events-none" />
+
+    <div className="relative animate-fadeIn">
       {/* ── Top bar: Add Day + Role Switcher ── */}
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 w-full px-2">
-        {isManager && !viewingAsUser ? (
+        {(!viewingAsUser || !isManager) ? (
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 flex-1">
-            <button onClick={handleAddDay} className="bg-white rounded-xl shadow-md border border-slate-200 p-4 flex items-center justify-between cursor-pointer hover:shadow-lg transition-all group flex-1 max-w-xl">
+            <button onClick={handleAddDay} className="bg-black/20 backdrop-blur-md rounded-xl shadow-md border border-white/20 p-4 flex items-center justify-between cursor-pointer hover:shadow-lg transition-all group flex-1 max-w-xl text-white">
               
-              <div className="flex items-center gap-3 text-slate-400">
+              <div className="flex items-center gap-3 text-white/60">
                 <CalendarSmIcon className="w-5 h-5" />
-                <span className="font-medium group-hover:text-slate-600 tracking-tight">Plan task map for a new date...</span>
+                <span className="font-medium group-hover:text-white tracking-tight">Plan task map for a new date...</span>
               </div>
-              <PlusIcon className="text-slate-400 group-hover:text-indigo-600 w-6 h-6" />
+              <PlusIcon className="text-white/60 group-hover:text-white w-6 h-6" />
             </button>
-            <button
+            {/* <button
               onClick={() => setShowPlanner(true)}
-              className="flex items-center gap-2 px-5 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl shadow-lg shadow-indigo-200 hover:shadow-xl hover:-translate-y-0.5 transition-all font-bold text-sm shrink-0"
+              className="flex items-center gap-2 px-5 py-4 bg-indigo-600/30 backdrop-blur-md border border-indigo-300/40 text-white rounded-xl shadow-md shadow-indigo-900/20 hover:bg-indigo-600/40 hover:border-violet-300/50 hover:-translate-y-0.5 transition-all font-bold text-sm shrink-0"
             >
               <SparklesIcon className="w-5 h-5" /> Generate Plan
-            </button>
+            </button> */}
           </div>
         ) : (
           <div className="bg-indigo-600 p-4 rounded-2xl shadow-xl shadow-indigo-100 flex items-center justify-between flex-1 max-w-2xl">
@@ -440,21 +535,20 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
       ) : (
         <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6 pb-20">
           {filteredDays.map(day => (
-            <div key={day.id} className="break-inside-avoid border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group/card relative flex flex-col bg-white">
+            <div key={day.id} className="break-inside-avoid border border-white/20 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group/card relative flex flex-col bg-black/20 backdrop-blur-md">
               {/* Day header */}
-              <div className="flex items-center justify-between mb-6 border-b border-slate-50 pb-4">
+              <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
                 <div className="flex items-center gap-2">
-                  <CalendarSmIcon className="text-slate-400" />
+                  <CalendarSmIcon className="text-white/60" />
                   <input
                     type="date"
                     value={day.date}
-                    readOnly={!isManager}
                     onChange={(e) => handleUpdateDayDate(day.id, e.target.value)}
-                    className={`bg-transparent border-none p-0 font-bold text-slate-800 focus:ring-0 text-sm focus:outline-none ${isManager ? 'cursor-pointer' : 'cursor-default'}`}
+                    className="bg-transparent border-none p-0 font-bold text-white focus:ring-0 text-sm focus:outline-none cursor-pointer"
                   />
                 </div>
-                {isManager && !viewingAsUser && (
-                  <button onClick={() => setDayToDelete(day.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all opacity-40 group-hover/card:opacity-100">
+                {!viewingAsUser && (
+                  <button onClick={() => setDayToDelete(day.id)} className="p-1.5 text-white/40 hover:text-red-400 hover:bg-white/10 rounded-full transition-all opacity-40 group-hover/card:opacity-100">
                     <TrashIcon />
                   </button>
                 )}
@@ -466,6 +560,16 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                   const assignee = fullDb.users.find(u => u.id === task.assigneeId);
                   const project = fullDb.projects.find(p => p.id === task.projectId);
                   const subProject = fullDb.subProjects?.find(sp => sp.id === task.subProjectId);
+                  const resolvedCatalogTask = task.catalogTaskId
+                    ? (fullDb.tasks || []).find((ct) => String(ct.id) === String(task.catalogTaskId))
+                    : null;
+                  const catalogTasksForPick =
+                    task.projectId && task.subProjectId
+                      ? (fullDb.tasks || []).filter(
+                          (ct) =>
+                            ct.subProjectId === task.subProjectId && teamUserIds.includes(ct.createdBy)
+                        )
+                      : [];
                   const depTask = task.dependsOn
                     ? (day.tasks.find(t => t.id === task.dependsOn) || days.flatMap(d => d.tasks).find(t => t.id === task.dependsOn) || null)
                     : null;
@@ -473,6 +577,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                   const status = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
                   const StatusIcon = STATUS_ICONS[task.status] || CircleIcon;
                   const canEditTask = isManager || task.createdBy === user.id;
+                  const canMoveTask = canEditTask || (!isManager && task.assigneeId === user.id);
                   // Status: assignee only, not already done, and dependency must be done
                   const canChangeStatus = task.assigneeId === user.id && task.status !== 'done' && depDone;
                   const statusBlockReason = !depDone
@@ -512,51 +617,29 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                               }
                             }}
                             placeholder="Task details..."
-                            className={`flex-1 bg-transparent border-none p-0 text-sm focus:ring-0 focus:outline-none font-semibold resize-none overflow-hidden min-h-[1.25rem] ${task.status === 'done' ? 'line-through text-slate-400 decoration-2' : 'text-slate-700'}`}
+                            className={`flex-1 bg-transparent border-none p-0 text-sm focus:ring-0 focus:outline-none font-semibold resize-none overflow-hidden min-h-[1.25rem] ${task.status === 'done' ? 'line-through text-white/50 decoration-2' : 'text-white'}`}
                           />
                           <button 
                             onClick={() => setNoteToEdit({ dayId: day.id, taskId: task.id, description: task.description || '' })}
-                            className={`p-1.5 rounded-lg transition-all shrink-0 mt-[-2px] ${task.description ? 'text-indigo-600 bg-indigo-50 shadow-sm border border-indigo-100' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-50'}`}
+                            className={`p-1.5 rounded-lg transition-all shrink-0 mt-[-2px] ${task.description ? 'text-indigo-300 bg-indigo-500/20 shadow-sm border border-indigo-500/30' : 'text-white/50 hover:text-indigo-300 hover:bg-white/10'}`}
                             title={task.description ? 'View/Edit Notes' : 'Add Notes'}
                           >
                             <FileTextIcon className="w-3.5 h-3.5" />
                           </button>
                         </div>
                         {task.description && (
-                          <p className="text-[11px] text-slate-500 leading-relaxed font-medium line-clamp-2 px-0.5 border-l-2 border-indigo-100 pl-2 my-1">
+                          <p className="text-[11px] text-white/80 leading-relaxed font-medium line-clamp-2 px-0.5 border-l-2 border-white/20 pl-2 my-1">
                             {task.description}
                           </p>
                         )}
 
                         {/* Meta row */}
                         <div className="flex flex-wrap items-center gap-2">
-                          {/* Status badge dropdown */}
-                          {canChangeStatus ? (
-                          <HoverDropdown width="w-32" trigger={
-                            <button className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border border-transparent hover:border-current transition-all ${status.badgeCls}`}>
-                              {status.label}
-                            </button>
-                          }>
-                            {Object.entries(STATUS_CONFIG).map(([key, config]) => {
-                              const Icon = STATUS_ICONS[key];
-                              return (
-                                <button key={key} onClick={() => handleUpdateTask(day.id, task.id, 'status', key)} className="w-full text-left px-2 py-1.5 text-[9px] font-bold uppercase rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2">
-                                  <Icon className={config.dotCls} /> {config.label}
-                                </button>
-                              );
-                            })}
-                          </HoverDropdown>
-                          ) : (
-                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${status.badgeCls} opacity-60 cursor-not-allowed`} title="Only the assignee can change status">
-                              {status.label}
-                            </span>
-                          )}
-
                           {/* Project picker */}
                           <HoverDropdown width="w-48" trigger={
-                            <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-black/5 px-2 py-0.5 rounded-md border border-dashed border-slate-200">
-                              <BriefcaseIcon className={project ? 'text-indigo-500' : 'text-slate-300'} />
-                              <span className={`text-[9px] font-bold uppercase ${project ? 'text-indigo-600' : 'text-slate-300'}`}>
+                            <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
+                              <BriefcaseIcon className={project ? 'text-indigo-300' : 'text-white/50'} />
+                              <span className={`text-[9px] font-bold uppercase ${project ? 'text-indigo-200' : 'text-white/60'}`}>
                                 {project ? project.name : 'Project'}
                               </span>
                             </button>
@@ -564,7 +647,17 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                             {canEditTask && (
                               <div className="max-h-48 overflow-y-auto pr-1">
                                 {teamProjects.map(p => (
-                                  <button key={p.id} onClick={() => handleUpdateTask(day.id, task.id, 'projectId', p.id)} className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-indigo-50 rounded-lg flex items-center justify-between">
+                                  <button
+                                    key={p.id}
+                                    onClick={() =>
+                                      patchKeepTask(day.id, task.id, {
+                                        projectId: p.id,
+                                        subProjectId: null,
+                                        catalogTaskId: null,
+                                      })
+                                    }
+                                    className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-indigo-50 rounded-lg flex items-center justify-between"
+                                  >
                                     <span className="font-medium text-slate-600">{p.name}</span>
                                     {task.projectId === p.id && <CheckIcon className="text-indigo-500" />}
                                   </button>
@@ -576,17 +669,23 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                           {/* SubProject picker */}
                           {task.projectId && (
                             <HoverDropdown width="w-44" trigger={
-                              <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-black/5 px-2 py-0.5 rounded-md border border-dashed border-slate-200">
-                                <BriefcaseIcon className={subProject ? 'text-violet-500' : 'text-slate-300'} />
-                                <span className={`text-[9px] font-bold uppercase ${subProject ? 'text-violet-600' : 'text-slate-300'}`}>
-                                  {subProject ? subProject.name : 'Phase'}
+                              <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
+                                <BriefcaseIcon className={subProject ? 'text-violet-300' : 'text-white/50'} />
+                                <span className={`text-[9px] font-bold uppercase ${subProject ? 'text-violet-200' : 'text-white/60'}`}>
+                                  {subProject ? subProject.name : 'Subproject'}
                                 </span>
                               </button>
                             }>
                               {canEditTask && (
                                 <div className="max-h-48 overflow-y-auto pr-1">
                                   {taskSubProjects.map(sp => (
-                                    <button key={sp.id} onClick={() => handleUpdateTask(day.id, task.id, 'subProjectId', sp.id)} className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-violet-50 rounded-lg flex items-center justify-between">
+                                    <button
+                                      key={sp.id}
+                                      onClick={() =>
+                                        patchKeepTask(day.id, task.id, { subProjectId: sp.id, catalogTaskId: null })
+                                      }
+                                      className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-violet-50 rounded-lg flex items-center justify-between"
+                                    >
                                       <span className="font-medium text-slate-600">{sp.name}</span>
                                       {task.subProjectId === sp.id && <CheckIcon className="text-violet-500" />}
                                     </button>
@@ -596,9 +695,54 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                             </HoverDropdown>
                           )}
 
+                          {/* Catalog task picker (workspace tasks tied to phase) */}
+                          {task.projectId && task.subProjectId && (
+                            <HoverDropdown width="w-52" trigger={
+                              <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
+                                <ListChecksIcon className={resolvedCatalogTask ? 'text-emerald-300' : 'text-white/50'} />
+                                <span className={`text-[9px] font-bold uppercase ${resolvedCatalogTask ? 'text-emerald-200' : 'text-white/60'}`}>
+                                  {resolvedCatalogTask
+                                    ? resolvedCatalogTask.name
+                                    : task.catalogTaskId
+                                      ? 'Unavailable'
+                                      : 'Task'}
+                                </span>
+                              </button>
+                            }>
+                              {canEditTask && (
+                                <div className="max-h-48 overflow-y-auto pr-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => patchKeepTask(day.id, task.id, { catalogTaskId: null })}
+                                    className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-slate-50 rounded-lg flex items-center justify-between text-slate-500 border-b border-slate-100 mb-1"
+                                  >
+                                    <span className="font-medium italic">None</span>
+                                    {!task.catalogTaskId && <CheckIcon className="text-slate-400" />}
+                                  </button>
+                                  {catalogTasksForPick.map((ct) => (
+                                    <button
+                                      key={ct.id}
+                                      type="button"
+                                      onClick={() => patchKeepTask(day.id, task.id, { catalogTaskId: ct.id })}
+                                      className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-emerald-50 rounded-lg flex items-center justify-between"
+                                    >
+                                      <span className="font-medium text-slate-600 truncate">{ct.name}</span>
+                                      {String(ct.id) === String(task.catalogTaskId) ? (
+                                        <CheckIcon className="text-emerald-500 shrink-0 ml-1" />
+                                      ) : null}
+                                    </button>
+                                  ))}
+                                  {catalogTasksForPick.length === 0 && (
+                                    <p className="text-[10px] text-slate-400 italic px-2 py-2">No tasks for this phase</p>
+                                  )}
+                                </div>
+                              )}
+                            </HoverDropdown>
+                          )}
+
                           {/* Dependency badge */}
                           {depTask && (
-                            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[8px] font-bold uppercase ${depDone ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`} title={depDone ? `✅ "${depTask.title}" is done` : `🚫 Blocked — "${depTask.title}" not done yet`}>
+                            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[8px] font-bold uppercase ${depDone ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`} title={depDone ? `✅ "${depTask.title}" is done` : `🚫 Blocked — "${depTask.title}" not done yet`}>
                               {depDone ? '✅' : '🔒'} {depTask.title?.substring(0, 20) || 'Task'}
                             </span>
                           )}
@@ -606,9 +750,9 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                           {/* Dependency linker (manager or task owner) */}
                           {canEditTask && (
                             <HoverDropdown align="right" width="w-52" trigger={
-                              <button className={`flex items-center gap-1 hover:bg-black/5 px-2 py-0.5 rounded-md border border-dashed border-slate-200 ${task.dependsOn ? 'border-amber-200' : ''}`}>
-                                <LinkIcon className={task.dependsOn ? 'text-amber-500' : 'text-slate-300'} />
-                                <span className={`text-[9px] font-bold uppercase ${task.dependsOn ? 'text-amber-600' : 'text-slate-300'}`}>
+                              <button className={`flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30 ${task.dependsOn ? 'border-amber-300/50' : ''}`}>
+                                <LinkIcon className={task.dependsOn ? 'text-amber-300' : 'text-white/50'} />
+                                <span className={`text-[9px] font-bold uppercase ${task.dependsOn ? 'text-amber-200' : 'text-white/60'}`}>
                                   {task.dependsOn ? 'Linked' : 'Link'}
                                 </span>
                               </button>
@@ -648,17 +792,17 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                           {/* Assignee picker (manager only, requires project) */}
                           {isManager && !task.projectId ? (
-                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md opacity-40 cursor-not-allowed" title="Select a project first">
-                              <UserIcon className="text-slate-300" />
-                              <span className="text-[9px] font-bold uppercase text-slate-300">Project first</span>
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md opacity-50 cursor-not-allowed" title="Select a project first">
+                              <UserIcon className="text-white/50" />
+                              <span className="text-[9px] font-bold uppercase text-white/50">Project first</span>
                             </span>
                           ) : (
                             <HoverDropdown width="w-40" trigger={
-                              <button disabled={!isManager} className="flex items-center gap-1.5 hover:bg-black/5 px-2 py-0.5 rounded-md">
+                              <button disabled={!isManager} className="flex items-center gap-1.5 hover:bg-white/10 px-2 py-0.5 rounded-md">
                                 {assignee ? (
                                   <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold ${getUserColor(assignee.id, fullDb.users)}`}>{assignee.name[0]}</div>
-                                ) : <UserIcon className="text-slate-300" />}
-                                <span className={`text-[9px] font-bold uppercase ${assignee ? 'text-slate-500' : 'text-slate-300'}`}>
+                                ) : <UserIcon className="text-white/50" />}
+                                <span className={`text-[9px] font-bold uppercase ${assignee ? 'text-white/90' : 'text-white/60'}`}>
                                   {assignee ? assignee.name : 'Assign'}
                                 </span>
                               </button>
@@ -681,9 +825,9 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                           )}
 
                           {/* Move task */}
-                          {canEditTask && (
+                          {canMoveTask && (
                             <HoverDropdown align="right" width="w-40" trigger={
-                              <button className="flex items-center gap-1.5 hover:bg-black/5 px-2 py-0.5 rounded-md text-slate-300 hover:text-indigo-500">
+                              <button className="flex items-center gap-1.5 hover:bg-white/10 px-2 py-0.5 rounded-md text-white/60 hover:text-indigo-300 transition-colors">
                                 <ArrowRightLeftIcon /> <span className="text-[9px] font-bold uppercase">Move</span>
                               </button>
                             }>
@@ -697,7 +841,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                           {/* Locked indicator */}
                           {!canEditTask && (
-                            <div className="flex items-center gap-1 px-1 opacity-40 grayscale" title="Manager-assigned task. Read-only.">
+                            <div className="flex items-center gap-1 px-1 opacity-50 grayscale text-white/50" title="Manager-assigned task. Read-only.">
                               <LockIcon /> <span className="text-[7px] font-bold uppercase">Locked</span>
                             </div>
                           )}
@@ -706,7 +850,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                       {/* Delete task */}
                       {canEditTask && (
-                        <button onClick={() => handleDeleteTask(day.id, task.id)} className="opacity-0 group-hover/task:opacity-100 p-1 text-slate-300 hover:text-red-400 transition-opacity">
+                        <button onClick={() => handleDeleteTask(day.id, task.id)} className="opacity-0 group-hover/task:opacity-100 p-1 text-white/40 hover:text-red-400 transition-opacity">
                           <XIcon />
                         </button>
                       )}
@@ -718,7 +862,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
               {/* Add task button */}
               <button
                 onClick={() => handleAddTask(day.id)}
-                className="mt-8 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-indigo-400 hover:text-indigo-600 transition-all py-2.5 px-4 rounded-xl bg-indigo-50/30 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 w-full justify-center"
+                className="mt-8 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-indigo-300 hover:text-indigo-200 transition-all py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/20 w-full justify-center"
               >
                 <PlusIcon /> Create Task
               </button>
@@ -804,6 +948,8 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
           </div>
         </div>
       )}
+      {ConfirmModal}
+    </div>
     </div>
   );
 }

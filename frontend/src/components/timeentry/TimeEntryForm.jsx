@@ -2,17 +2,21 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { marked } from 'marked';
 import { AiWandIcon } from '../common/Icons';
 import api from '../../api';
+import { getActivityTypeIds } from '../../utils/timeEntryActivities';
 
 const MIN_CHARS = 100;
 const MAX_CHARS = 300;
 
 export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, initialData }) {
   const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
-  const [startTime, setStartTime] = useState(initialData?.startTime || '09:00:00');
-  const [endTime, setEndTime] = useState(initialData?.endTime || '17:00:00');
+  const [startTime, setStartTime] = useState(initialData?.startTime || '10:00');
+  const [endTime, setEndTime] = useState(initialData?.endTime || '19:00');
   const [projectId, setProjectId] = useState(initialData?.projectId || '');
-  const [subProjectId, setSubProjectId] = useState(initialData?.subProjectId || '');
-  const [activityTypeId, setActivityTypeId] = useState(initialData?.activityTypeId || '');
+  const [subProjectIds, setSubProjectIds] = useState(initialData?.subProjectIds || (initialData?.subProjectId ? [initialData.subProjectId] : []));
+  const [taskIds, setTaskIds] = useState(initialData?.taskIds || (initialData?.taskId ? [initialData.taskId] : []));
+  const [activityTypeIds, setActivityTypeIds] = useState(() =>
+    getActivityTypeIds(initialData || {})
+  );
   const [priority, setPriority] = useState(initialData?.priority || 'Medium');
   const [workLocation, setWorkLocation] = useState(initialData?.workLocation || 'Office');
   const [teamMemberIds, setTeamMemberIds] = useState(initialData?.teamMemberIds || []);
@@ -35,11 +39,12 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
   useEffect(() => {
     if (initialData) {
       setDate(initialData.date || new Date().toISOString().split('T')[0]);
-      setStartTime(initialData.startTime || '09:00:00');
-      setEndTime(initialData.endTime || '17:00:00');
+      setStartTime(initialData.startTime || '10:00');
+      setEndTime(initialData.endTime || '19:00');
       setProjectId(initialData.projectId || '');
-      setSubProjectId(initialData.subProjectId || '');
-      setActivityTypeId(initialData.activityTypeId || '');
+      setSubProjectIds(initialData.subProjectIds || (initialData.subProjectId ? [initialData.subProjectId] : []));
+      setTaskIds(initialData.taskIds || (initialData.taskId ? [initialData.taskId] : []));
+      setActivityTypeIds(getActivityTypeIds(initialData));
       setPriority(initialData.priority || 'Medium');
       setWorkLocation(initialData.workLocation || 'Office');
       setTeamMemberIds(initialData.teamMemberIds || []);
@@ -72,15 +77,17 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
   const userProjects = useMemo(() => fullDb.projects.filter((p) => teamUserIds.includes(p.createdBy)), [fullDb.projects, teamUserIds]);
   const userActivityTypes = useMemo(() => fullDb.activityTypes, [fullDb.activityTypes]);
   const userTeamMembers = useMemo(() => {
-    const customTeammates = fullDb.teamMembers.filter((i) => teamUserIds.includes(i.createdBy));
-    const realUsersAsTeammates = fullDb.users
+    return fullDb.users
       .filter(u => teamUserIds.includes(u.id) && u.id !== userId)
       .map(u => ({ id: u.id, name: u.name, isRealUser: true }));
-    return [...customTeammates, ...realUsersAsTeammates];
-  }, [fullDb.teamMembers, fullDb.users, teamUserIds, userId]);
+  }, [fullDb.users, teamUserIds, userId]);
   const availableSubProjects = useMemo(
     () => fullDb.subProjects.filter((sp) => sp.projectId === projectId && teamUserIds.includes(sp.createdBy)),
     [fullDb.subProjects, projectId, teamUserIds]
+  );
+  const availableTasks = useMemo(
+    () => (fullDb.tasks || []).filter((t) => subProjectIds.includes(t.subProjectId) && teamUserIds.includes(t.createdBy)),
+    [fullDb.tasks, subProjectIds, teamUserIds]
   );
   const userStakeholders = useMemo(() => fullDb.stakeholders.filter((s) => teamUserIds.includes(s.createdBy)), [fullDb.stakeholders, teamUserIds]);
 
@@ -111,29 +118,58 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     try {
       const result = await api.fillEntryByAI(aiPrompt);
 
-      // Auto-select project
+      // Auto-select project, sub-projects, tasks
       if (result.projectId) {
-        // Check it belongs to this user
         const matchedProject = userProjects.find((p) => p.id === result.projectId);
         if (matchedProject) {
           setProjectId(matchedProject.id);
-          // After project set, check subproject
-          if (result.subProjectId) {
-            const matchedSub = fullDb.subProjects.find(
-              (sp) => sp.id === result.subProjectId && sp.projectId === matchedProject.id
-            );
-            if (matchedSub) setSubProjectId(matchedSub.id);
-            else setSubProjectId('');
-          } else {
-            setSubProjectId('');
+
+          let rawSpIds = [];
+          if (Array.isArray(result.subProjectIds) && result.subProjectIds.length) {
+            rawSpIds = result.subProjectIds;
+          } else if (result.subProjectId) {
+            rawSpIds = [result.subProjectId];
           }
+
+          const subOk = (sp) =>
+            sp.projectId === matchedProject.id && teamUserIds.includes(sp.createdBy);
+
+          let nextSubIds = rawSpIds.filter((spid) => fullDb.subProjects.some((sp) => sp.id === spid && subOk(sp)));
+
+          const incomingTaskIds = Array.isArray(result.taskIds) ? result.taskIds : [];
+          const resolveTask = (tid) => (fullDb.tasks || []).find((tt) => tt.id === tid);
+          const tasksForProject = incomingTaskIds
+            .map((tid) => resolveTask(tid))
+            .filter(
+              (t) =>
+                t &&
+                fullDb.subProjects.some((sp) => sp.id === t.subProjectId && subOk(sp)) &&
+                teamUserIds.includes(t.createdBy)
+            );
+
+          if (!nextSubIds.length && tasksForProject.length) {
+            nextSubIds = [...new Set(tasksForProject.map((t) => t.subProjectId))];
+          }
+
+          setSubProjectIds(nextSubIds.length ? nextSubIds : []);
+
+          const allowedSp = new Set(nextSubIds);
+          const validTaskIds =
+            incomingTaskIds.length && allowedSp.size
+              ? incomingTaskIds.filter((tid) => {
+                  const t = resolveTask(tid);
+                  return t && allowedSp.has(t.subProjectId) && teamUserIds.includes(t.createdBy);
+                })
+              : tasksForProject.map((t) => t.id);
+
+          setTaskIds(validTaskIds);
         }
       }
 
-      // Auto-select activity type
-      if (result.activityTypeId) {
-        const matchedActivity = userActivityTypes.find((a) => a.id === result.activityTypeId);
-        if (matchedActivity) setActivityTypeId(matchedActivity.id);
+      const aiIds = Array.isArray(result.activityTypeIds) ? result.activityTypeIds : result.activityTypeId ? [result.activityTypeId] : [];
+      if (aiIds.length) {
+        const valid = aiIds.filter((id) => userActivityTypes.some((a) => a.id === id));
+        if (valid.length) setActivityTypeIds(valid);
       }
 
       // Fill description
@@ -158,9 +194,11 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     }
   };
 
-  const selectedActivityName = userActivityTypes.find((a) => a.id === activityTypeId)?.name?.toLowerCase() || '';
-  const isLunchBreak = selectedActivityName === 'lunch/break';
-  const isHoliday = selectedActivityName === 'holiday';
+  const selectedActivityNames = activityTypeIds
+    .map((id) => userActivityTypes.find((a) => a.id === id)?.name?.toLowerCase())
+    .filter(Boolean);
+  const isLunchBreak = selectedActivityNames.some((n) => n === 'lunch/break');
+  const isHoliday = selectedActivityNames.some((n) => n === 'holiday');
   const isSpecialMode = isLunchBreak || isHoliday;
 
   const handleSubmit = (e) => {
@@ -168,9 +206,9 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     setFormError('');
     if (!isSpecialMode) {
       if (!projectId) { setFormError('Please select a Project.'); return; }
-      if (!subProjectId) { setFormError('Please select a Sub-Project.'); return; }
+      if (subProjectIds.length === 0) { setFormError('Please select at least one Sub-Project.'); return; }
     }
-    if (!activityTypeId) { setFormError('Please select an Activity Type.'); return; }
+    if (!activityTypeIds.length) { setFormError('Please select at least one Activity Type.'); return; }
     if (hours <= 0) { setFormError('End time must be after start time.'); return; }
     onSaveEntry({
       id: isEditing ? initialData.id : undefined,
@@ -180,8 +218,9 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       endTime,
       hours,
       projectId: isSpecialMode ? undefined : projectId,
-      subProjectId: isSpecialMode ? undefined : subProjectId,
-      activityTypeId,
+      subProjectIds: isSpecialMode ? [] : subProjectIds,
+      taskIds: isSpecialMode ? [] : taskIds,
+      activityTypeIds,
       priority: isSpecialMode ? 'Medium' : priority,
       workLocation: isSpecialMode ? 'Office' : workLocation,
       teamMemberIds: isSpecialMode ? [] : teamMemberIds,
@@ -231,11 +270,11 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className={labelClasses}>Start</label>
-                  <input type="time" step="1" value={startTime} onChange={(e) => setStartTime(e.target.value)} required className={inputClasses} />
+                  <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required className={inputClasses} />
                 </div>
                 <div>
                   <label className={labelClasses}>End</label>
-                  <input type="time" step="1" value={endTime} onChange={(e) => setEndTime(e.target.value)} required className={inputClasses} />
+                  <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required className={inputClasses} />
                 </div>
                 <div>
                   <label className={labelClasses}>Hours</label>
@@ -348,12 +387,18 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
             {/* ── Rest of form fields ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
 
-              {/* Activity Type */}
+              {/* Activity Types (multi) */}
               <div className={isSpecialMode ? 'md:col-span-2' : ''}>
-                <label className={labelClasses}>Activity Type <span className="text-red-400">*</span></label>
-                <select value={activityTypeId} onChange={(e) => setActivityTypeId(e.target.value)} required className={inputClasses}>
-                  <option value="">Select Activity</option>
-                  {userActivityTypes.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                <label className={labelClasses}>Activity Types <span className="text-red-400">*</span> <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
+                <select
+                  multiple
+                  value={activityTypeIds}
+                  onChange={(e) => setActivityTypeIds(Array.from(e.target.selectedOptions, (o) => o.value))}
+                  className={`${inputClasses} min-h-[7rem]`}
+                >
+                  {userActivityTypes.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -364,7 +409,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
                     <label className={labelClasses}>Project <span className="text-red-400">*</span></label>
                     <select
                       value={projectId}
-                      onChange={(e) => { setProjectId(e.target.value); setSubProjectId(''); }}
+                      onChange={(e) => { setProjectId(e.target.value); setSubProjectIds([]); }}
                       required={!isSpecialMode}
                       className={inputClasses}
                     >
@@ -375,17 +420,37 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
 
                   {/* Sub-Project */}
                   <div>
-                    <label className={labelClasses}>Sub-Project <span className="text-red-400">*</span></label>
+                    <label className={labelClasses}>Sub-Project <span className="text-red-400">*</span> <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
                     <select
-                      value={subProjectId}
-                      onChange={(e) => setSubProjectId(e.target.value)}
+                      multiple
+                      value={subProjectIds}
+                      onChange={(e) => {
+                        setSubProjectIds(Array.from(e.target.selectedOptions, (o) => o.value));
+                        setTaskIds([]); // Reset tasks when sub-project changes
+                      }}
                       required={!isSpecialMode}
                       disabled={!projectId}
-                      className={`${inputClasses} disabled:bg-slate-100`}
+                      className={`${inputClasses} h-28 overflow-y-auto disabled:bg-slate-100`}
                     >
-                      <option value="">Select Sub-Project</option>
                       {availableSubProjects.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
                     </select>
+                  </div>
+
+                  {/* Tasks */}
+                  <div>
+                    <label className={labelClasses}>Tasks <span className="text-slate-400 font-normal normal-case">(Optional)</span> <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
+                    <select
+                      multiple
+                      value={taskIds}
+                      onChange={(e) => setTaskIds(Array.from(e.target.selectedOptions, (o) => o.value))}
+                      disabled={subProjectIds.length === 0}
+                      className={`${inputClasses} h-28 overflow-y-auto disabled:bg-slate-100`}
+                    >
+                      {availableTasks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                    {subProjectIds.length > 0 && availableTasks.length === 0 && (
+                      <p className="text-[10px] text-slate-400 mt-1 italic">No tasks available for selected sub-projects.</p>
+                    )}
                   </div>
 
                   {/* Company (auto) */}

@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 
 export default function ProjectSummaryTable({ entries, fullDb }) {
   const [expandedProjects, setExpandedProjects] = useState(new Set());
@@ -17,13 +17,15 @@ export default function ProjectSummaryTable({ entries, fullDb }) {
       const project = projectMap.get(entry.projectId);
       project.hours += entry.hours;
 
-      if (!project.subProjects.has(entry.subProjectId)) {
-        project.subProjects.set(entry.subProjectId, {
-          name: fullDb.subProjects.find((sp) => sp.id === entry.subProjectId)?.name || 'Unknown Sub-Project',
+      const spKey = (entry.subProjectIds || (entry.subProjectId ? [entry.subProjectId] : [])).sort().join(',') || 'none';
+      if (!project.subProjects.has(spKey)) {
+        const names = (entry.subProjectIds || (entry.subProjectId ? [entry.subProjectId] : [])).map(id => fullDb.subProjects.find(sp => sp.id === id)?.name).filter(Boolean);
+        project.subProjects.set(spKey, {
+          name: names.length > 0 ? names.join(', ') : 'Unknown Sub-Project',
           hours: 0,
         });
       }
-      project.subProjects.get(entry.subProjectId).hours += entry.hours;
+      project.subProjects.get(spKey).hours += entry.hours;
     });
 
     return Array.from(projectMap.entries())

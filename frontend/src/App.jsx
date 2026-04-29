@@ -88,7 +88,19 @@ function AuthenticatedApp({ currentUser, setCurrentUser }) {
   }
 
   if (activeRole === 'Superadmin') {
-    return <SuperadminView user={currentUser} onLogout={handleLogout} allUsers={fullDbState.users} setUsers={handleSetUsers} />;
+    return (
+      <SuperadminView
+        user={currentUser}
+        onLogout={handleLogout}
+        allUsers={fullDbState.users}
+        setUsers={handleSetUsers}
+        activityTypes={fullDbState.activityTypes || []}
+        onRefreshDb={async () => {
+          const data = await api.getAllData();
+          setFullDbState(data);
+        }}
+      />
+    );
   }
 
   if (activeRole === 'Manager') {

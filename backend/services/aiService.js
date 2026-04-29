@@ -29,11 +29,21 @@ export async function generateSummary(timeEntries, fullDb, reportType = 'employe
   const subProjectMap = Object.fromEntries((fullDb.subProjects || []).map((sp) => [sp.id, sp.name]));
   const activityMap = Object.fromEntries((fullDb.activityTypes || []).map((a) => [a.id, a.name]));
 
+  const activityLabel = (entry) => {
+    const ids = entry.activityTypeIds?.length
+      ? entry.activityTypeIds
+      : entry.activityTypeId
+        ? [entry.activityTypeId]
+        : [];
+    const names = ids.map((id) => activityMap[id]).filter(Boolean);
+    return names.length ? names.join(', ') : 'N/A';
+  };
+
   const simplified = timeEntries.map((entry) => ({
     employee: userMap[entry.userId] || 'Unknown',
     project: projectMap[entry.projectId] || 'Unknown',
     subProject: subProjectMap[entry.subProjectId] || 'N/A',
-    activity: activityMap[entry.activityTypeId] || 'N/A',
+    activity: activityLabel(entry),
     date: entry.date,
     hours: entry.hours,
     description: entry.description || 'N/A',
@@ -200,24 +210,34 @@ export async function generateProjectConfig(userPrompt, existingProjectNames) {
     throw Object.assign(new Error('No prompt provided.'), { statusCode: 400 });
   }
 
-  const existingNames = 'none'; // Unused, keeping signature backward-compatible
-
   const systemPrompt = `You are a project configuration assistant. Based on the user's description, extract and return ONLY a valid JSON object (no markdown fences, no explanation) with exactly this structure:
 
 {
   "projectName": "<short project name inferred from the description, 1-3 words, title-case>",
   "purpose": "<brief purpose or objective of the project, 1-2 sentences>",
-  "subProjects": ["<sub-project 1>", "<sub-project 2>", "<sub-project 3>"]
+  "suggestedCompanyNames": ["<company name if inferable from the text, optional>"],
+  "subProjects": [
+    {
+      "name": "<sub-project name, at most 5 words>",
+      "description": "<one short sentence>",
+      "tasks": [
+        { "name": "<task title, actionable>", "description": "<optional short clarifier>" },
+        ...
+      ]
+    }
+  ]
 }
 
 Rules:
-- projectName must be a short, meaningful title for the project (1–3 words, title-case) inferred from the user's description.
-- purpose must define the core goal logically.
-- subProjects must be an array of AT LEAST 10 logical work-streams, modules, or functional areas.
-- CRITICAL: Every subProject name must be AT MOST 3 WORDS. Use concise module-style names like "AI Chatbot Engine", "HR Admin Dashboard", "Auth & Permissions", "Analytics Module", "Deployment & Infrastructure".
-- IMPORTANT: Ensure the subProjects are NOT generic. They MUST be highly specific and tailored based on the user's role and the project described.
-- For software engineering, web development, or backend development roles, generate subprojects that reflect real technical components: e.g. frontend UI, backend API, database layer, auth system, admin portal, integrations, testing, deployment, etc. — named in 3 words or fewer.
-- Return ONLY the raw JSON object. No markdown. No extra text.
+- projectName must be a short, meaningful title (1–3 words, title-case).
+- suggestedCompanyNames: include only companies clearly mentioned; else use [].
+- purpose must define the core goal.
+- subProjects: include AT LEAST 5 distinct workstreams or modules relevant to the project (not filler).
+- Every sub-project MUST include a "tasks" array with AT LEAST 2 and AT MOST 10 tasks that belong specifically to THAT sub-project.
+- Task names must be concise (preferably ≤ 10 words).
+- sub-project names MUST be AT MOST 5 words.
+- Tasks must be grouped under the correct sub-project (development tasks under backend/frontend/etc. as described).
+- Return ONLY raw JSON.
 
 User description:
 ${userPrompt}`;
@@ -233,13 +253,28 @@ ${userPrompt}`;
     .replace(/\s*```$/i, '');
 
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    // Backward-compat: old clients expected subProjects as string[]
+    if (Array.isArray(parsed.subProjects)) {
+      parsed.subProjects = parsed.subProjects.map((item) => {
+        if (typeof item === 'string') {
+          return {
+            name: item,
+            description: '',
+            tasks: [],
+          };
+        }
+        if (!item.tasks && item.name) return { ...item, tasks: [] };
+        return item;
+      });
+    }
+    return parsed;
   } catch {
     throw Object.assign(new Error('AI returned invalid JSON. Please try again with a clearer description.'), { statusCode: 500 });
   }
 }
 
-export async function fillEntryByAI(userPrompt, projects, subProjects, activityTypes, teamMembers) {
+export async function fillEntryByAI(userPrompt, projects, subProjects, activityTypes, teamMembers, tasks = []) {
   if (!ai) {
     throw Object.assign(new Error('Gemini API is not configured on the server.'), { statusCode: 500 });
   }
@@ -250,6 +285,9 @@ export async function fillEntryByAI(userPrompt, projects, subProjects, activityT
 
   const projectList = (projects || []).map((p) => `- id: "${p.id}", name: "${p.name}"`).join('\n') || 'none';
   const subProjectList = (subProjects || []).map((sp) => `- id: "${sp.id}", name: "${sp.name}", projectId: "${sp.projectId}"`).join('\n') || 'none';
+  const taskList = (tasks || [])
+    .map((t) => `- id: "${t.id}", name: "${t.name}", subProjectId: "${t.subProjectId}"`)
+    .join('\n') || 'none';
   const activityTypeList = (activityTypes || []).map((a) => `- id: "${a.id}", name: "${a.name}"`).join('\n') || 'none';
   const teamMemberList = (teamMembers || []).map((tm) => `- id: "${tm.id}", name: "${tm.name}"`).join('\n') || 'none';
 
@@ -257,17 +295,23 @@ export async function fillEntryByAI(userPrompt, projects, subProjects, activityT
 
 {
   "projectId": "<best matching project id from the list, or null if none match>",
-  "subProjectId": "<best matching sub-project id from the list that belongs to the chosen project, or null>",
-  "activityTypeId": "<best matching activity type id from the list, or null>",
+  "subProjectIds": ["<sub-project id>", "..."],
+  "taskIds": ["<task id>", "..."],
+  "activityTypeIds": ["<one or more activity type ids from the list that match the work>"],
   "teamMemberIds": ["<id of team member 1>", "<id of team member 2>"],
   "description": "<professional bullet-point description of the work done, using markdown bullet points (- item)>"
 }
+
+Fields subProjectIds and taskIds replace the old single subProjectId. Use legacy only if needed: you may also output subProjectId (single) for backward compat — the server merges into subProjectIds.
 
 Available projects:
 ${projectList}
 
 Available sub-projects:
 ${subProjectList}
+
+Available tasks (each belongs to ONE sub-project; only choose tasks whose subProjectId is in your chosen subProjectIds):
+${taskList}
 
 Available activity types:
 ${activityTypeList}
@@ -276,10 +320,14 @@ Available team members:
 ${teamMemberList}
 
 Rules:
-- Match projectId, subProjectId, activityTypeId, and teamMemberIds by comparing the user's description to the names semantically. Choose the closest matches.
-- teamMemberIds should be an array of project member IDs who were mentioned or likely involved. If none, return empty array [].
-- If no reasonable match exists for IDs, set the field to null (or [] for teamMemberIds).
-- description must use markdown bullet points (lines starting with "- "). Write 3-6 concise professional bullets describing what was done.
+- Pick projectId first; then subProjectIds — only sub-projects that belong to that project id.
+- subProjectIds: non-empty when the work maps to phases; otherwise []. Prefer the minimal set that matches the description (often 1–3 ids).
+- taskIds: include only task ids whose subProjectId is one of your chosen subProjectIds. Pick concrete tasks mentioned or clearly implied by the work (meetings, features, fixes). Prefer 1–8 tasks when relevant; else [].
+- If tasks list is "none", set taskIds to [].
+- activityTypeIds: non-empty when any activity fits; else [] only if genuinely no match.
+- teamMemberIds: who was mentioned or involved; else [].
+- If nothing matches for a field, use null or [] as appropriate.
+- description: markdown bullets "- ", 3-6 bullets.
 - Return ONLY the raw JSON object. No markdown fences. No explanation.
 
 User task description:
@@ -297,7 +345,18 @@ ${userPrompt}`;
     .replace(/\s*```$/i, '');
 
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (parsed.activityTypeId && (!parsed.activityTypeIds || !parsed.activityTypeIds.length)) {
+      parsed.activityTypeIds = [parsed.activityTypeId];
+      delete parsed.activityTypeId;
+    }
+    let spIds = Array.isArray(parsed.subProjectIds) ? parsed.subProjectIds : [];
+    if (!spIds.length && parsed.subProjectId) spIds = [parsed.subProjectId];
+    parsed.subProjectIds = spIds;
+    if (parsed.subProjectId) delete parsed.subProjectId;
+
+    if (!Array.isArray(parsed.taskIds)) parsed.taskIds = [];
+    return parsed;
   } catch {
     throw Object.assign(new Error('AI returned invalid JSON. Please try again.'), { statusCode: 500 });
   }

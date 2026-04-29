@@ -17,9 +17,21 @@ export const getAll = async (req, res) => {
   res.json(entries);
 };
 
+function normalizeActivityTypeIds(body) {
+  let ids = body.activityTypeIds;
+  if ((!ids || !ids.length) && body.activityTypeId) {
+    ids = [body.activityTypeId];
+  }
+  return Array.isArray(ids) ? ids.filter(Boolean) : [];
+}
+
 export const create = async (req, res) => {
-  const { id, ...data } = req.body;
-  const entry = await TimeEntry.create(data);
+  const { id, activityTypeId: _legacy, ...rest } = req.body;
+  const activityTypeIds = normalizeActivityTypeIds(req.body);
+  if (!activityTypeIds.length) {
+    return res.status(400).json({ error: 'At least one activity type is required' });
+  }
+  const entry = await TimeEntry.create({ ...rest, activityTypeIds });
   res.status(201).json(entry);
 };
 
@@ -29,12 +41,19 @@ export const update = async (req, res) => {
 
   const fields = [
     'date', 'startTime', 'endTime', 'hours', 'description',
-    'priority', 'workLocation', 'projectId', 'subProjectId',
-    'activityTypeId', 'teamMemberIds',
+    'priority', 'workLocation', 'projectId', 'subProjectIds', 'taskIds',
+    'teamMemberIds', 'stakeholderIds',
   ];
   fields.forEach((field) => {
     if (req.body[field] !== undefined) entry[field] = req.body[field];
   });
+  if (req.body.activityTypeIds !== undefined || req.body.activityTypeId !== undefined) {
+    const ids = normalizeActivityTypeIds(req.body);
+    if (!ids.length) {
+      return res.status(400).json({ error: 'At least one activity type is required' });
+    }
+    entry.activityTypeIds = ids;
+  }
 
   await entry.save();
   res.json(entry);

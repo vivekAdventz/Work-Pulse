@@ -18,6 +18,8 @@ function getAuthHeaders() {
   const token = localStorage.getItem('authToken');
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  const activeRole = localStorage.getItem('activeRole');
+  if (activeRole) headers['X-Active-Role'] = activeRole;
   return headers;
 }
 
@@ -74,21 +76,27 @@ const api = {
   getStakeholders: () => api.request('/stakeholders'),
   getProjects: () => api.request('/projects'),
   getSubProjects: () => api.request('/subProjects'),
+  getTasks: () => api.request('/tasks'),
   getActivityTypes: () => api.request('/activityTypes'),
+  getActivityTags: () => api.request('/activityTags'),
+  createActivityTag: (data) => api.request('/activityTags', 'POST', data),
+  updateActivityTag: (id, data) => api.request(`/activityTags/${id}`, 'PUT', data),
+  deleteActivityTag: (id) => api.request(`/activityTags/${id}`, 'DELETE'),
   getTeamMembers: () => api.request('/teamMembers'),
   
   getAllData: async () => {
-    const [users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers] = await Promise.all([
+    const [users, timeEntries, companies, stakeholders, projects, subProjects, tasks, activityTypes, teamMembers] = await Promise.all([
       api.getUsers(),
       api.getTimeEntries(),
       api.getCompanies(),
       api.getStakeholders(),
       api.getProjects(),
       api.getSubProjects(),
+      api.getTasks(),
       api.getActivityTypes(),
       api.getTeamMembers(),
     ]);
-    return { users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers };
+    return { users, timeEntries, companies, stakeholders, projects, subProjects, tasks, activityTypes, teamMembers };
   },
 
   generateSummary: (timeEntries, fullDb, reportType = 'employee') => api.request('/generate-summary', 'POST', { timeEntries, fullDb, reportType }),
