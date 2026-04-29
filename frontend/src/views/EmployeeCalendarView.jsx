@@ -70,7 +70,9 @@ export default function EmployeeCalendarView({ entries, fullDb, currentUser, onE
           ))}
           {daysInMonth.map((day, index) => {
             const isToday = day && day.toDateString() === new Date().toDateString();
-            const dateStr = day ? day.toISOString().split('T')[0] : null;
+            const dateStr = day
+              ? `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+              : null;
             const dayEntries = day && entriesByDate[dateStr] ? entriesByDate[dateStr] : [];
             const isWeekend = day && (day.getDay() === 0 || day.getDay() === 6);
             

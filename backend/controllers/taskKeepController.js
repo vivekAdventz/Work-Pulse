@@ -70,7 +70,7 @@ export const createDay = async (req, res) => {
     return res.status(409).json({ error: 'A card for this date already exists' });
   }
 
-  const day = await TaskDay.create({ date, managerId, tasks: [] });
+  const day = await TaskDay.create({ date, managerId, createdBy: req.user.userId, tasks: [] });
   res.status(201).json(day);
 };
 

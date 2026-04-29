@@ -150,10 +150,21 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
   const debounceTimers = useRef({});
 
-  // ── Team resolution (self + downward reports only, never upward) ──
+  // ── Team resolution: self + manager + siblings + downward reports ──
+  // (mirrors TimeEntryForm so the same projects/subprojects are visible here)
   const teamUserIds = useMemo(() => {
     const allUsers = fullDb.users;
+    const currentUser = allUsers.find(u => u.id === user.id);
     const ids = new Set([user.id]);
+
+    // Upward: include direct manager and their team (siblings of current user)
+    if (currentUser?.reportsTo) {
+      const managerId = currentUser.reportsTo;
+      ids.add(managerId);
+      allUsers.filter(u => u.reportsTo === managerId).forEach(u => ids.add(u.id));
+    }
+
+    // Downward: include all recursive direct reports
     let currentParents = [user.id];
     while (currentParents.length > 0) {
       const children = allUsers.filter(u => currentParents.includes(u.reportsTo) && !ids.has(u.id));
@@ -165,9 +176,25 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
     return Array.from(ids);
   }, [fullDb.users, user.id]);
 
+  // Downward-only: people the manager can assign tasks to (direct + recursive reports)
+  const reporteeIds = useMemo(() => {
+    const allUsers = fullDb.users;
+    const ids = new Set();
+    let currentParents = [user.id];
+    while (currentParents.length > 0) {
+      const children = allUsers.filter(u => currentParents.includes(u.reportsTo) && !ids.has(u.id));
+      if (children.length === 0) break;
+      const nextParents = [];
+      children.forEach(c => { ids.add(c.id); nextParents.push(c.id); });
+      currentParents = nextParents;
+    }
+    return Array.from(ids);
+  }, [fullDb.users, user.id]);
+
+  // Only downward reports are valid assignees; upward manager is excluded
   const teamMembers = useMemo(() =>
-    fullDb.users.filter(u => teamUserIds.includes(u.id) && u.id !== user.id),
-    [fullDb.users, teamUserIds, user.id]
+    fullDb.users.filter(u => reporteeIds.includes(u.id)),
+    [fullDb.users, reporteeIds]
   );
 
   const teamProjects = useMemo(() =>
@@ -195,12 +222,12 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
     };
   }, [loadDays]);
 
-  // ── Filter days based on role ──
+  // ── Filter days based on role — empty cards are NEVER shown ──
   const filteredDays = useMemo(() => {
     const targetUserId = viewingAsUser || (isManager ? null : user.id);
-    if (!targetUserId) return days; // Manager sees all
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    // Manager all-tasks view: show every card that has at least one task
+    if (!targetUserId) return days.filter(d => d.tasks.length > 0);
 
     return days
       .map(d => ({
@@ -210,21 +237,21 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
           const creator = t.createdBy?.toString();
 
           if (viewingAsUser) {
-            // Manager viewing as employee: only show tasks assigned to that employee
-            // that were NOT self-created by the employee (i.e., manager-assigned only)
+            // Manager "view as employee" pane: tasks assigned to that employee
+            // by someone else (manager-created assignments to this reportee)
             return assignee === targetUserId && creator !== targetUserId;
           }
 
-          // Employee's own view: show tasks assigned to them or created by them
-          return assignee === targetUserId ||
-            (!assignee && creator === targetUserId);
+          // Employee's own tab:
+          // - Tasks assigned to me (regardless of who created them).
+          // - Tasks I created that have NOT been reassigned to someone else.
+          const assignedToMe = assignee === targetUserId;
+          const myUnreassignedTask = creator === targetUserId && (!assignee || assignee === targetUserId);
+          return assignedToMe || myUnreassignedTask;
         }),
       }))
-      .filter(d => {
-        if (viewingAsUser) return d.tasks.length > 0; // Manager viewing one reportee
-        if (isManager) return true; // Manager all-tasks view keeps empty day cards
-        return d.tasks.length > 0 || d.date >= todayStr; // Employee view
-      });
+      // Always require at least one visible task — no empty cards ever
+      .filter(d => d.tasks.length > 0);
   }, [days, isManager, user.id, viewingAsUser]);
 
   // ── Day operations ──
@@ -238,9 +265,16 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
     }
     try {
       const newDay = await api.createTaskDay(nextDate);
+      // Auto-add one empty task so the card is never shown empty
+      const dayWithTask = await api.addTaskToDay(newDay.id, {
+        title: '',
+        assigneeId: isManager ? null : user.id,
+        projectId: null,
+        status: 'todo',
+      });
       setDays(prev => {
-        if (prev.some(d => d.id === newDay.id)) return prev;
-        return [newDay, ...prev].sort((a, b) => b.date.localeCompare(a.date));
+        if (prev.some(d => d.id === dayWithTask.id)) return prev;
+        return [dayWithTask, ...prev].sort((a, b) => b.date.localeCompare(a.date));
       });
       showToast?.('Date card created.', 'success');
     } catch (err) {
@@ -376,11 +410,22 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
   };
 
   const handleDeleteTask = async (dayId, taskId) => {
-    const ok = await confirm('This task will be permanently deleted.', { title: 'Delete Task' });
+    const day = days.find(d => d.id === dayId);
+    const isLastTask = day && day.tasks.length === 1;
+    const confirmMsg = isLastTask
+      ? 'This is the only task on this card. Deleting it will also remove the card.'
+      : 'This task will be permanently deleted.';
+    const ok = await confirm(confirmMsg, { title: 'Delete Task' });
     if (!ok) return;
     try {
-      const updated = await api.deleteTaskFromDay(dayId, taskId);
-      setDays(prev => prev.map(d => d.id === dayId ? updated : d));
+      if (isLastTask) {
+        // Delete the whole day card when its last task is removed
+        await api.deleteTaskDay(dayId);
+        setDays(prev => prev.filter(d => d.id !== dayId));
+      } else {
+        const updated = await api.deleteTaskFromDay(dayId, taskId);
+        setDays(prev => prev.map(d => d.id === dayId ? updated : d));
+      }
     } catch (err) {
       showToast?.(`Failed to delete task: ${err.message}`, 'error');
     }
@@ -567,7 +612,8 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                     task.projectId && task.subProjectId
                       ? (fullDb.tasks || []).filter(
                           (ct) =>
-                            ct.subProjectId === task.subProjectId && teamUserIds.includes(ct.createdBy)
+                            String(ct.subProjectId) === String(task.subProjectId) &&
+                            teamUserIds.includes(ct.createdBy)
                         )
                       : [];
                   const depTask = task.dependsOn
@@ -584,7 +630,9 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                     ? `Blocked — "${depTask?.title || 'Linked task'}" must be done first`
                     : task.status === 'done' ? 'Task is complete'
                     : task.assigneeId !== user.id ? 'Only the assignee can change status' : '';
-                  const taskSubProjects = task.projectId ? (fullDb.subProjects || []).filter(sp => sp.projectId === task.projectId) : [];
+                  const taskSubProjects = task.projectId
+                    ? (fullDb.subProjects || []).filter(sp => String(sp.projectId) === String(task.projectId))
+                    : [];
 
                   return (
                     <div key={task.id} className="group/task flex items-start gap-4 relative">
@@ -636,16 +684,16 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                         {/* Meta row */}
                         <div className="flex flex-wrap items-center gap-2">
                           {/* Project picker */}
-                          <HoverDropdown width="w-48" trigger={
+                          <HoverDropdown width="w-52" trigger={
                             <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
                               <BriefcaseIcon className={project ? 'text-indigo-300' : 'text-white/50'} />
-                              <span className={`text-[9px] font-bold uppercase ${project ? 'text-indigo-200' : 'text-white/60'}`}>
+                              <span className={`text-[9px] font-bold uppercase truncate max-w-[80px] ${project ? 'text-indigo-200' : 'text-white/60'}`}>
                                 {project ? project.name : 'Project'}
                               </span>
                             </button>
                           }>
                             {canEditTask && (
-                              <div className="max-h-48 overflow-y-auto pr-1">
+                              <div className="max-h-[150px] overflow-y-auto pr-1">
                                 {teamProjects.map(p => (
                                   <button
                                     key={p.id}
@@ -668,16 +716,19 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                           {/* SubProject picker */}
                           {task.projectId && (
-                            <HoverDropdown width="w-44" trigger={
+                            <HoverDropdown width="w-52" trigger={
                               <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
                                 <BriefcaseIcon className={subProject ? 'text-violet-300' : 'text-white/50'} />
-                                <span className={`text-[9px] font-bold uppercase ${subProject ? 'text-violet-200' : 'text-white/60'}`}>
+                                <span className={`text-[9px] font-bold uppercase truncate max-w-[80px] ${subProject ? 'text-violet-200' : 'text-white/60'}`}>
                                   {subProject ? subProject.name : 'Subproject'}
                                 </span>
                               </button>
                             }>
                               {canEditTask && (
-                                <div className="max-h-48 overflow-y-auto pr-1">
+                                <div className="max-h-[150px] overflow-y-auto pr-1">
+                                  {taskSubProjects.length === 0 && (
+                                    <p className="text-[10px] text-slate-400 italic px-2 py-2">No phases for this project</p>
+                                  )}
                                   {taskSubProjects.map(sp => (
                                     <button
                                       key={sp.id}
@@ -697,10 +748,10 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                           {/* Catalog task picker (workspace tasks tied to phase) */}
                           {task.projectId && task.subProjectId && (
-                            <HoverDropdown width="w-52" trigger={
+                            <HoverDropdown width="w-56" trigger={
                               <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
                                 <ListChecksIcon className={resolvedCatalogTask ? 'text-emerald-300' : 'text-white/50'} />
-                                <span className={`text-[9px] font-bold uppercase ${resolvedCatalogTask ? 'text-emerald-200' : 'text-white/60'}`}>
+                                <span className={`text-[9px] font-bold uppercase truncate max-w-[80px] ${resolvedCatalogTask ? 'text-emerald-200' : 'text-white/60'}`}>
                                   {resolvedCatalogTask
                                     ? resolvedCatalogTask.name
                                     : task.catalogTaskId
@@ -710,7 +761,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                               </button>
                             }>
                               {canEditTask && (
-                                <div className="max-h-48 overflow-y-auto pr-1">
+                                <div className="max-h-[150px] overflow-y-auto pr-1">
                                   <button
                                     type="button"
                                     onClick={() => patchKeepTask(day.id, task.id, { catalogTaskId: null })}
@@ -848,12 +899,15 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                         </div>
                       </div>
 
-                      {/* Delete task */}
-                      {canEditTask && (
-                        <button onClick={() => handleDeleteTask(day.id, task.id)} className="opacity-0 group-hover/task:opacity-100 p-1 text-white/40 hover:text-red-400 transition-opacity">
-                          <XIcon />
-                        </button>
-                      )}
+                      {/* Delete task — always visible on hover; disabled if created by manager */}
+                      <button
+                        onClick={() => canEditTask && handleDeleteTask(day.id, task.id)}
+                        disabled={!canEditTask}
+                        title={canEditTask ? 'Delete task' : 'Cannot delete — this task was assigned by your manager'}
+                        className={`opacity-0 group-hover/task:opacity-100 p-1 transition-opacity ${canEditTask ? 'text-white/40 hover:text-red-400 cursor-pointer' : 'text-white/20 cursor-not-allowed'}`}
+                      >
+                        <XIcon />
+                      </button>
                     </div>
                   );
                 })}
