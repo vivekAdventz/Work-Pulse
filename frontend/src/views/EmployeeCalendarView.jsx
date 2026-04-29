@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { marked } from 'marked';
+import { formatActivities } from '../utils/timeEntryActivities';
 
 export default function EmployeeCalendarView({ entries, fullDb, currentUser, onEditEntry }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -7,7 +8,6 @@ export default function EmployeeCalendarView({ entries, fullDb, currentUser, onE
 
   const projectMap = useMemo(() => new Map(fullDb.projects.map((p) => [p.id, p.name])), [fullDb.projects]);
   const subProjectMap = useMemo(() => new Map(fullDb.subProjects.map((sp) => [sp.id, sp.name])), [fullDb.subProjects]);
-  const activityMap = useMemo(() => new Map(fullDb.activityTypes.map((a) => [a.id, a.name])), [fullDb.activityTypes]);
   const stakeholderMap = useMemo(() => new Map(fullDb.stakeholders.map((s) => [s.id, s.name])), [fullDb.stakeholders]);
   
   const userMap = useMemo(() => {
@@ -146,7 +146,7 @@ export default function EmployeeCalendarView({ entries, fullDb, currentUser, onE
                 
                 <div>
                   <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Activity Type</span>
-                  <div className="font-medium bg-slate-100 inline-block px-2.5 py-1 rounded-md text-xs font-semibold text-slate-700 border border-slate-200">{activityMap.get(selectedEntry.activityTypeId) || 'N/A'}</div>
+                  <div className="font-medium bg-slate-100 inline-block px-2.5 py-1 rounded-md text-xs font-semibold text-slate-700 border border-slate-200">{formatActivities(selectedEntry, fullDb.activityTypes)}</div>
                 </div>
                 <div>
                   <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Location & Priority</span>

@@ -12,7 +12,15 @@ const timeEntrySchema = new mongoose.Schema({
   projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
   subProjectIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SubProject' }],
   taskIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
-  activityTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'ActivityType', required: true },
+  activityTypeIds: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ActivityType' }],
+    validate: {
+      validator(v) {
+        return Array.isArray(v) && v.length > 0;
+      },
+      message: 'At least one activity type is required',
+    },
+  },
   teamMemberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'TeamMember' }],
   stakeholderIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Stakeholder' }],
   deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]

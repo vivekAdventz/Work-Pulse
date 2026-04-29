@@ -1,5 +1,6 @@
 import { EditIcon, DeleteIcon, EmptyIcon } from '../common/Icons';
 import { useConfirm } from '../common/useConfirm';
+import { formatActivities } from '../../utils/timeEntryActivities';
 
 export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry, onEditEntry, readOnly = false, currentUserId }) {
   const { ConfirmModal, confirm } = useConfirm();
@@ -22,7 +23,6 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
   const projectMap = new Map(fullDb.projects.map((p) => [p.id, p.name]));
   const subProjectMap = new Map((fullDb.subProjects || []).map((sp) => [sp.id, sp.name]));
   const taskMap = new Map((fullDb.tasks || []).map((t) => [t.id, t.name]));
-  const activityMap = new Map(fullDb.activityTypes.map((a) => [a.id, a.name]));
   const stakeholderMap = new Map(fullDb.stakeholders.map((s) => [s.id, s.name]));
 
   // Build team member name map: real users + custom team members
@@ -71,7 +71,7 @@ export default function TimeEntryList({ entries, allUsers, fullDb, onDeleteEntry
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 max-w-[150px] truncate" title={(entry.taskIds || (entry.taskId ? [entry.taskId] : [])).map(id => taskMap.get(id)).filter(Boolean).join(', ')}>
                   {(entry.taskIds || (entry.taskId ? [entry.taskId] : [])).map(id => taskMap.get(id)).filter(Boolean).join(', ') || '—'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{activityMap.get(entry.activityTypeId) || 'N/A'}</td>
+                <td className="px-6 py-4 text-sm text-slate-600 max-w-[200px] truncate" title={formatActivities(entry, fullDb.activityTypes)}>{formatActivities(entry, fullDb.activityTypes)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-sky-600">{entry.hours.toFixed(2)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.startTime?.toString().slice(0, 5)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{entry.endTime?.toString().slice(0, 5)}</td>

@@ -10,22 +10,21 @@ export async function seedDatabase() {
   // await User.deleteMany({});
 
   const exists = await User.findOne({ email: 'superadmin@adventz.com' });
-  if (exists) {
-    console.log('Superadmin already exists! Skipping seeding.');
-    return;
+  if (!exists) {
+    const hashedPassword = await bcrypt.hash('superadmin@1234', 10);
+
+    await User.create({
+      name: 'Super Admin',
+      email: 'superadmin@adventz.com',
+      roles: ['Superadmin'],
+      password: hashedPassword,
+      active: true
+    });
+
+    console.log('Database seeded with superadmin (email: superadmin@adventz.com, password: superadmin@123)');
+  } else {
+    console.log('Superadmin already exists! Skipping user seeding.');
   }
-
-  const hashedPassword = await bcrypt.hash('superadmin@1234', 10);
-
-  await User.create({
-    name: 'Super Admin',
-    email: 'superadmin@adventz.com',
-    roles: ['Superadmin'],
-    password: hashedPassword,
-    active: true
-  });
-
-  console.log('Database seeded with superadmin (email: superadmin@adventz.com, password: superadmin@123)');
 }
 
 // Run executed directly

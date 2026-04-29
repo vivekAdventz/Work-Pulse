@@ -11,6 +11,7 @@ import ManagerCalendarView from './ManagerCalendarView';
 import { SparklesIcon, ListIcon, CalendarIcon } from '../components/common/Icons';
 import TaskKeepView from '../components/taskkeep/TaskKeepView';
 import TimeEntryForm from '../components/timeentry/TimeEntryForm';
+import { formatActivities } from '../utils/timeEntryActivities';
 import Toast, { useToast } from '../components/common/Toast';
 import ReportModal from '../components/modals/ReportModal';
 
@@ -161,7 +162,7 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
         Employee: fullDb.users.find(u => u.id === e.userId)?.name || 'Unknown',
         Project: fullDb.projects.find(p => p.id === e.projectId)?.name || 'Unknown',
         'Sub-Project': (e.subProjectIds || (e.subProjectId ? [e.subProjectId] : [])).map(id => fullDb.subProjects.find(sp => sp.id === id)?.name).filter(Boolean).join(', ') || 'N/A',
-        Activity: fullDb.activityTypes.find(a => a.id === e.activityTypeId)?.name || 'Unknown',
+        Activity: formatActivities(e, fullDb.activityTypes),
         Hours: e.hours,
         Location: e.workLocation,
         Billable: e.billable ? 'Yes' : 'No',
@@ -423,7 +424,7 @@ export default function ManagerView({ user, fullDb, onLogout, hasBothRoles = fal
                         <td className="px-4 py-2 text-slate-500">{(e.subProjectIds || (e.subProjectId ? [e.subProjectId] : [])).map(id => fullDb.subProjects.find(sp => sp.id === id)?.name).filter(Boolean).join(', ') || '-'}</td>
                         <td className="px-4 py-2">
                           <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-xs font-medium text-slate-600 border border-slate-200">
-                            {fullDb.activityTypes.find(a => a.id === e.activityTypeId)?.name || 'Unknown'}
+                            {formatActivities(e, fullDb.activityTypes)}
                           </span>
                         </td>
                         <td className="px-4 py-2 font-bold text-sky-600">{e.hours}h</td>

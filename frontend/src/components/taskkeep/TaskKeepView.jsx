@@ -16,11 +16,11 @@ const BG_IMAGES = [
 ];
 const BG_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
-// ─── Status Configuration ─────────────────────────────
+// ─── Status styling (icons only — no status labels in UI) ──
 const STATUS_CONFIG = {
-  todo: { label: 'To Do', badgeCls: 'bg-slate-100 text-slate-500', dotCls: 'text-slate-300' },
-  doing: { label: 'In Progress', badgeCls: 'bg-blue-50 text-blue-600', dotCls: 'text-blue-500' },
-  done: { label: 'Done', badgeCls: 'bg-emerald-50 text-emerald-600', dotCls: 'text-emerald-500' },
+  todo: { dotCls: 'text-slate-300' },
+  doing: { dotCls: 'text-blue-500' },
+  done: { dotCls: 'text-emerald-500' },
 };
 
 // ─── Inline SVG Icons ──────────────────────────────────
@@ -47,6 +47,9 @@ const XIcon = ({ className }) => (
 );
 const BriefcaseIcon = ({ className }) => (
   <svg className={className} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" /></svg>
+);
+const ListChecksIcon = ({ className }) => (
+  <svg className={className} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" /></svg>
 );
 const UserIcon = ({ className }) => (
   <svg className={className} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
@@ -296,6 +299,7 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
           date: day.date,
           projectId: task.projectId || '',
           subProjectId: task.subProjectId || '',
+          taskIds: task.catalogTaskId ? [task.catalogTaskId] : [],
           description: task.title || '',
           _taskKeepDayId: dayId,
           _taskKeepTaskId: taskId,
@@ -342,12 +346,32 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
       }
 
       // If we're updating status or project, a full refresh might be needed to maintain consistency
-      if (field === 'status' || field === 'projectId' || field === 'assigneeId') {
+      if (field === 'status' || field === 'projectId' || field === 'assigneeId' || field === 'subProjectId' || field === 'catalogTaskId') {
         loadDays();
       }
     } catch (err) {
       showToast?.(`Failed to update task: ${err.message}`, 'error');
       loadDays(); // Revert optimistic update
+    }
+  };
+
+  const patchKeepTask = async (dayId, taskId, patch) => {
+    setDays((prev) =>
+      prev.map((d) => {
+        if (d.id !== dayId) return d;
+        return {
+          ...d,
+          tasks: d.tasks.map((t) => (t.id === taskId ? { ...t, ...patch } : t)),
+        };
+      })
+    );
+    try {
+      const updated = await api.updateTaskInDay(dayId, taskId, patch);
+      setDays((prev) => prev.map((d) => (d.id === dayId ? updated : d)));
+      loadDays();
+    } catch (err) {
+      showToast?.(`Failed to update task: ${err.message}`, 'error');
+      loadDays();
     }
   };
 
@@ -433,12 +457,12 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
               </div>
               <PlusIcon className="text-white/60 group-hover:text-white w-6 h-6" />
             </button>
-            <button
+            {/* <button
               onClick={() => setShowPlanner(true)}
               className="flex items-center gap-2 px-5 py-4 bg-indigo-600/30 backdrop-blur-md border border-indigo-300/40 text-white rounded-xl shadow-md shadow-indigo-900/20 hover:bg-indigo-600/40 hover:border-violet-300/50 hover:-translate-y-0.5 transition-all font-bold text-sm shrink-0"
             >
               <SparklesIcon className="w-5 h-5" /> Generate Plan
-            </button>
+            </button> */}
           </div>
         ) : (
           <div className="bg-indigo-600 p-4 rounded-2xl shadow-xl shadow-indigo-100 flex items-center justify-between flex-1 max-w-2xl">
@@ -536,6 +560,16 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                   const assignee = fullDb.users.find(u => u.id === task.assigneeId);
                   const project = fullDb.projects.find(p => p.id === task.projectId);
                   const subProject = fullDb.subProjects?.find(sp => sp.id === task.subProjectId);
+                  const resolvedCatalogTask = task.catalogTaskId
+                    ? (fullDb.tasks || []).find((ct) => String(ct.id) === String(task.catalogTaskId))
+                    : null;
+                  const catalogTasksForPick =
+                    task.projectId && task.subProjectId
+                      ? (fullDb.tasks || []).filter(
+                          (ct) =>
+                            ct.subProjectId === task.subProjectId && teamUserIds.includes(ct.createdBy)
+                        )
+                      : [];
                   const depTask = task.dependsOn
                     ? (day.tasks.find(t => t.id === task.dependsOn) || days.flatMap(d => d.tasks).find(t => t.id === task.dependsOn) || null)
                     : null;
@@ -601,28 +635,6 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
 
                         {/* Meta row */}
                         <div className="flex flex-wrap items-center gap-2">
-                          {/* Status badge dropdown */}
-                          {canChangeStatus ? (
-                          <HoverDropdown width="w-32" trigger={
-                            <button className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border border-transparent hover:border-current transition-all ${status.badgeCls}`}>
-                              {status.label}
-                            </button>
-                          }>
-                            {Object.entries(STATUS_CONFIG).map(([key, config]) => {
-                              const Icon = STATUS_ICONS[key];
-                              return (
-                                <button key={key} onClick={() => handleUpdateTask(day.id, task.id, 'status', key)} className="w-full text-left px-2 py-1.5 text-[9px] font-bold uppercase rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2">
-                                  <Icon className={config.dotCls} /> {config.label}
-                                </button>
-                              );
-                            })}
-                          </HoverDropdown>
-                          ) : (
-                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${status.badgeCls} opacity-60 cursor-not-allowed`} title="Only the assignee can change status">
-                              {status.label}
-                            </span>
-                          )}
-
                           {/* Project picker */}
                           <HoverDropdown width="w-48" trigger={
                             <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
@@ -635,7 +647,17 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                             {canEditTask && (
                               <div className="max-h-48 overflow-y-auto pr-1">
                                 {teamProjects.map(p => (
-                                  <button key={p.id} onClick={() => handleUpdateTask(day.id, task.id, 'projectId', p.id)} className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-indigo-50 rounded-lg flex items-center justify-between">
+                                  <button
+                                    key={p.id}
+                                    onClick={() =>
+                                      patchKeepTask(day.id, task.id, {
+                                        projectId: p.id,
+                                        subProjectId: null,
+                                        catalogTaskId: null,
+                                      })
+                                    }
+                                    className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-indigo-50 rounded-lg flex items-center justify-between"
+                                  >
                                     <span className="font-medium text-slate-600">{p.name}</span>
                                     {task.projectId === p.id && <CheckIcon className="text-indigo-500" />}
                                   </button>
@@ -650,18 +672,69 @@ export default function TaskKeepView({ user, fullDb, setFullDb, isManager, showT
                               <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
                                 <BriefcaseIcon className={subProject ? 'text-violet-300' : 'text-white/50'} />
                                 <span className={`text-[9px] font-bold uppercase ${subProject ? 'text-violet-200' : 'text-white/60'}`}>
-                                  {subProject ? subProject.name : 'Phase'}
+                                  {subProject ? subProject.name : 'Subproject'}
                                 </span>
                               </button>
                             }>
                               {canEditTask && (
                                 <div className="max-h-48 overflow-y-auto pr-1">
                                   {taskSubProjects.map(sp => (
-                                    <button key={sp.id} onClick={() => handleUpdateTask(day.id, task.id, 'subProjectId', sp.id)} className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-violet-50 rounded-lg flex items-center justify-between">
+                                    <button
+                                      key={sp.id}
+                                      onClick={() =>
+                                        patchKeepTask(day.id, task.id, { subProjectId: sp.id, catalogTaskId: null })
+                                      }
+                                      className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-violet-50 rounded-lg flex items-center justify-between"
+                                    >
                                       <span className="font-medium text-slate-600">{sp.name}</span>
                                       {task.subProjectId === sp.id && <CheckIcon className="text-violet-500" />}
                                     </button>
                                   ))}
+                                </div>
+                              )}
+                            </HoverDropdown>
+                          )}
+
+                          {/* Catalog task picker (workspace tasks tied to phase) */}
+                          {task.projectId && task.subProjectId && (
+                            <HoverDropdown width="w-52" trigger={
+                              <button disabled={!canEditTask} className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded-md border border-dashed border-white/30">
+                                <ListChecksIcon className={resolvedCatalogTask ? 'text-emerald-300' : 'text-white/50'} />
+                                <span className={`text-[9px] font-bold uppercase ${resolvedCatalogTask ? 'text-emerald-200' : 'text-white/60'}`}>
+                                  {resolvedCatalogTask
+                                    ? resolvedCatalogTask.name
+                                    : task.catalogTaskId
+                                      ? 'Unavailable'
+                                      : 'Task'}
+                                </span>
+                              </button>
+                            }>
+                              {canEditTask && (
+                                <div className="max-h-48 overflow-y-auto pr-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => patchKeepTask(day.id, task.id, { catalogTaskId: null })}
+                                    className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-slate-50 rounded-lg flex items-center justify-between text-slate-500 border-b border-slate-100 mb-1"
+                                  >
+                                    <span className="font-medium italic">None</span>
+                                    {!task.catalogTaskId && <CheckIcon className="text-slate-400" />}
+                                  </button>
+                                  {catalogTasksForPick.map((ct) => (
+                                    <button
+                                      key={ct.id}
+                                      type="button"
+                                      onClick={() => patchKeepTask(day.id, task.id, { catalogTaskId: ct.id })}
+                                      className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-emerald-50 rounded-lg flex items-center justify-between"
+                                    >
+                                      <span className="font-medium text-slate-600 truncate">{ct.name}</span>
+                                      {String(ct.id) === String(task.catalogTaskId) ? (
+                                        <CheckIcon className="text-emerald-500 shrink-0 ml-1" />
+                                      ) : null}
+                                    </button>
+                                  ))}
+                                  {catalogTasksForPick.length === 0 && (
+                                    <p className="text-[10px] text-slate-400 italic px-2 py-2">No tasks for this phase</p>
+                                  )}
                                 </div>
                               )}
                             </HoverDropdown>

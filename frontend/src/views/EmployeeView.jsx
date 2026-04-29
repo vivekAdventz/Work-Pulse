@@ -12,6 +12,7 @@ import AiFillModal from '../components/modals/AiFillModal';
 import Toast, { useToast } from '../components/common/Toast';
 import { PlusIcon, PlayIcon, CalendarIcon, TableIcon, AiWandIcon } from '../components/common/Icons';
 import TaskKeepView from '../components/taskkeep/TaskKeepView';
+import { formatActivities, entryMatchesActivityFilter } from '../utils/timeEntryActivities';
 
 export default function EmployeeView({ user, onLogout, hasBothRoles = false, activeRole = null, onToggleRole = null }) {
   const { toasts, showToast, removeToast } = useToast();
@@ -318,7 +319,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
       const stakeholderProjectIds = projects.filter((p) => p.stakeholderId === stakeholderFilter).map((p) => p.id);
       entries = entries.filter((e) => stakeholderProjectIds.includes(e.projectId));
     }
-    if (activityFilter) entries = entries.filter((e) => e.activityTypeId === activityFilter);
+    if (activityFilter) entries = entries.filter((e) => entryMatchesActivityFilter(e, activityFilter));
     if (priorityFilter) entries = entries.filter((e) => e.priority === priorityFilter);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -348,38 +349,8 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
   // so they don't break until they are also refactored to fetch their own data.
   const localDb = { users, timeEntries, companies, stakeholders, projects, subProjects, tasks: userTasks, activityTypes, teamMembers };
 
-  const handleAiFill = async ({ projectName, companyNames, subProjects, purpose }) => {
-    // 1. Create or reuse companies
-    const companyIds = [];
-    for (const name of companyNames) {
-      let company = userCompanies.find((c) => c.name.toLowerCase() === name.toLowerCase());
-      if (!company) {
-        company = await api.addItem('companies', { name, createdBy: user.id });
-        setFullDb((prev) => ({ ...prev, companies: [...prev.companies, company] }));
-      }
-      companyIds.push(company.id || company._id);
-    }
-
-    // 2. Create project
-    const newProject = await api.addItem('projects', {
-      name: projectName,
-      companyIds,
-      purpose,
-      createdBy: user.id,
-    });
-    setProjects((prev) => [...prev, newProject]);
-
-    // 4. Create sub-projects sequentially
-    const projectId = newProject.id || newProject._id;
-    const createdSubProjects = [];
-    for (const spName of subProjects) {
-      const sp = await api.addItem('subProjects', { name: spName, projectId, createdBy: user.id });
-      createdSubProjects.push(sp);
-    }
-    if (createdSubProjects.length > 0) {
-      setSubProjects((prev) => [...prev, ...createdSubProjects]);
-    }
-    showToast(`Project "${projectName}" created with ${createdSubProjects.length} sub-projects.`, 'success');
+  const handleAiFill = async ({ projectData, localSubProjects }) => {
+    await handleSaveProject(projectData, localSubProjects, null);
   };
 
 
@@ -430,7 +401,7 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
         Company: company?.name || 'N/A',
         Project: project?.name || 'N/A',
         SubProject: (entry.subProjectIds || (entry.subProjectId ? [entry.subProjectId] : [])).map(id => subProjects.find(sp => sp.id === id)?.name).filter(Boolean).join(', ') || 'N/A',
-        Activity: activityTypes.find((a) => a.id === entry.activityTypeId)?.name || 'N/A',
+        Activity: formatActivities(entry, activityTypes),
         Location: entry.workLocation,
         Priority: entry.priority,
         Description: entry.description,
@@ -643,8 +614,6 @@ export default function EmployeeView({ user, onLogout, hasBothRoles = false, act
         <AiFillModal
           existingProjects={userProjects}
           companies={userCompanies}
-          stakeholders={userStakeholders}
-          user={user}
           onClose={() => setIsAiFillOpen(false)}
           onSave={handleAiFill}
         />

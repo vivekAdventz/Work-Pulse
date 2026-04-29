@@ -7,6 +7,7 @@ import SubProject from '../models/SubProject.js';
 import ActivityType from '../models/ActivityType.js';
 import TeamMember from '../models/TeamMember.js';
 import { getTeamUserIds } from '../services/teamService.js';
+import { getActivityTypeQuery } from '../services/activityVisibilityService.js';
 
 export const getAllData = async (req, res) => {
   const isSuperadmin = req.user.roles && req.user.roles.includes('Superadmin');
@@ -21,6 +22,7 @@ export const getAllData = async (req, res) => {
     ]
   };
 
+  const actQuery = await getActivityTypeQuery(req);
   const [users, timeEntries, companies, stakeholders, projects, subProjects, activityTypes, teamMembers] =
     await Promise.all([
       User.find(userFilter),
@@ -29,7 +31,7 @@ export const getAllData = async (req, res) => {
       Stakeholder.find(scopeFilter),
       Project.find(scopeFilter),
       SubProject.find(scopeFilter),
-      ActivityType.find(), // ActivityTypes are global
+      ActivityType.find(actQuery).populate('tagId', 'name slug sortOrder'),
       TeamMember.find(scopeFilter),
     ]);
 

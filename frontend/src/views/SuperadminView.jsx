@@ -1,28 +1,97 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import api from '../api';
 import { PlusIcon, EditIcon, DeleteIcon } from '../components/common/Icons';
 import Toast, { useToast } from '../components/common/Toast';
 import { useConfirm } from '../components/common/useConfirm';
 
-export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
+function normalizeTagIds(raw) {
+  if (!raw?.length) return [];
+  return raw.map((x) => (typeof x === 'object' && x !== null && x.id ? x.id : x));
+}
+
+export default function SuperadminView({
+  user,
+  onLogout,
+  allUsers,
+  setUsers,
+  activityTypes = [],
+  onRefreshDb,
+}) {
   const { toasts, showToast, removeToast } = useToast();
   const { ConfirmModal, confirm } = useConfirm();
+  const [mainTab, setMainTab] = useState('team');
+
+  const [activityTags, setActivityTags] = useState([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
+
+  const loadTags = useCallback(async () => {
+    setTagsLoading(true);
+    try {
+      const tags = await api.getActivityTags();
+      setActivityTags(tags);
+    } catch (e) {
+      showToast(e.message || 'Failed to load activity tags', 'error');
+    } finally {
+      setTagsLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    loadTags();
+  }, [loadTags]);
+
+  const commonTagId = useMemo(
+    () => activityTags.find((t) => t.slug === 'common')?.id,
+    [activityTags]
+  );
+
+  const sortedTypes = useMemo(() => {
+    const list = [...activityTypes];
+    list.sort((a, b) => {
+      const an = typeof a.tagId === 'object' ? a.tagId?.name || '' : '';
+      const bn = typeof b.tagId === 'object' ? b.tagId?.name || '' : '';
+      if (an !== bn) return an.localeCompare(bn);
+      return (a.name || '').localeCompare(b.name || '');
+    });
+    return list;
+  }, [activityTypes]);
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const initialFormData = { name: '', email: '', roles: ['Employee'], reportsTo: '' };
+  const initialFormData = { name: '', email: '', roles: ['Employee'], reportsTo: '', activityTagIds: [] };
   const [formData, setFormData] = useState(initialFormData);
   const managers = allUsers.filter((u) => u.roles?.includes('Manager') && u.active);
   const usersToShow = allUsers.filter((u) => !u.roles?.includes('Superadmin'));
 
+  const [tagFormOpen, setTagFormOpen] = useState(false);
+  const [editingTag, setEditingTag] = useState(null);
+  const [tagForm, setTagForm] = useState({ name: '', slug: '', sortOrder: 0 });
+
+  const [typeFormOpen, setTypeFormOpen] = useState(false);
+  const [editingType, setEditingType] = useState(null);
+  const [typeForm, setTypeForm] = useState({ name: '', tagId: '' });
+
+  const refreshAll = async () => {
+    if (onRefreshDb) await onRefreshDb();
+    await loadTags();
+  };
+
   const handleAddClick = () => {
     setEditingUser(null);
-    setFormData(initialFormData);
+    const defaultTags = commonTagId ? [commonTagId] : [];
+    setFormData({ ...initialFormData, activityTagIds: defaultTags });
     setIsFormOpen(true);
   };
 
   const handleEditClick = (userToEdit) => {
     setEditingUser(userToEdit);
-    setFormData({ name: userToEdit.name, email: userToEdit.email, roles: userToEdit.roles || ['Employee'], reportsTo: userToEdit.reportsTo || '' });
+    setFormData({
+      name: userToEdit.name,
+      email: userToEdit.email,
+      roles: userToEdit.roles || ['Employee'],
+      reportsTo: userToEdit.reportsTo || '',
+      activityTagIds: normalizeTagIds(userToEdit.activityTagIds),
+    });
     setIsFormOpen(true);
   };
 
@@ -30,7 +99,15 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
     const userToUpdate = allUsers.find((u) => u.id === userId);
     if (userToUpdate) {
       try {
-        const updatedUser = await api.updateUser(userId, { ...userToUpdate, active: !currentStatus });
+        const payload = {
+          name: userToUpdate.name,
+          email: userToUpdate.email,
+          roles: userToUpdate.roles,
+          reportsTo: userToUpdate.reportsTo || null,
+          activityTagIds: normalizeTagIds(userToUpdate.activityTagIds),
+          active: !currentStatus,
+        };
+        const updatedUser = await api.updateUser(userId, payload);
         setUsers(allUsers.map((u) => (u.id === userId ? updatedUser : u)));
         showToast(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully.`, 'success');
       } catch (error) {
@@ -55,6 +132,15 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
     }
   };
 
+  const toggleUserTag = (tagId) => {
+    setFormData((prev) => {
+      const set = new Set(prev.activityTagIds || []);
+      if (set.has(tagId)) set.delete(tagId);
+      else set.add(tagId);
+      return { ...prev, activityTagIds: [...set] };
+    });
+  };
+
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -77,9 +163,14 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
       showToast('Please select a manager for this employee.', 'warning');
       return;
     }
+    if (formData.roles.includes('Employee') && (!formData.activityTagIds || formData.activityTagIds.length === 0)) {
+      showToast('Select at least one activity tag for employees.', 'warning');
+      return;
+    }
     const payload = {
       ...formData,
       reportsTo: formData.roles.includes('Employee') ? formData.reportsTo : null,
+      activityTagIds: formData.roles.includes('Employee') ? formData.activityTagIds : [],
     };
     try {
       if (editingUser) {
@@ -98,6 +189,110 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
     }
   };
 
+  const openNewTag = () => {
+    setEditingTag(null);
+    setTagForm({ name: '', slug: '', sortOrder: 0 });
+    setTagFormOpen(true);
+  };
+
+  const openEditTag = (tag) => {
+    setEditingTag(tag);
+    setTagForm({ name: tag.name, slug: tag.slug, sortOrder: tag.sortOrder ?? 0 });
+    setTagFormOpen(true);
+  };
+
+  const submitTag = async (e) => {
+    e.preventDefault();
+    if (!tagForm.name.trim() || !tagForm.slug.trim()) {
+      showToast('Name and slug are required.', 'warning');
+      return;
+    }
+    try {
+      if (editingTag) {
+        await api.updateActivityTag(editingTag.id, tagForm);
+        showToast('Tag updated.', 'success');
+      } else {
+        await api.createActivityTag(tagForm);
+        showToast('Tag created.', 'success');
+      }
+      setTagFormOpen(false);
+      await refreshAll();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const deleteTag = async (tag) => {
+    if (tag.slug === 'common') {
+      showToast('The common tag cannot be deleted.', 'warning');
+      return;
+    }
+    const ok = await confirm(`Delete tag "${tag.name}"?`, { title: 'Delete tag' });
+    if (!ok) return;
+    try {
+      await api.deleteActivityTag(tag.id);
+      showToast('Tag deleted.', 'info');
+      await refreshAll();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const openNewType = () => {
+    setEditingType(null);
+    setTypeForm({
+      name: '',
+      tagId: commonTagId || activityTags[0]?.id || '',
+    });
+    setTypeFormOpen(true);
+  };
+
+  const openEditType = (t) => {
+    const tid = typeof t.tagId === 'object' ? t.tagId?.id : t.tagId;
+    setEditingType(t);
+    setTypeForm({ name: t.name, tagId: tid || '' });
+    setTypeFormOpen(true);
+  };
+
+  const submitType = async (e) => {
+    e.preventDefault();
+    if (!typeForm.name.trim() || !typeForm.tagId) {
+      showToast('Name and tag are required.', 'warning');
+      return;
+    }
+    try {
+      if (editingType) {
+        await api.updateItem('activityTypes', editingType.id, {
+          name: typeForm.name.trim(),
+          tagId: typeForm.tagId,
+        });
+        showToast('Activity type updated.', 'success');
+      } else {
+        await api.addItem('activityTypes', {
+          name: typeForm.name.trim(),
+          tagId: typeForm.tagId,
+        });
+        showToast('Activity type created.', 'success');
+      }
+      setTypeFormOpen(false);
+      await refreshAll();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const deleteType = async (t) => {
+    const ok = await confirm(`Delete activity type "${t.name}"?`, { title: 'Delete activity type' });
+    if (!ok) return;
+    try {
+      await api.deleteItem('activityTypes', t.id);
+      showToast('Activity type deleted.', 'info');
+      await refreshAll();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="h-16 bg-white border-b border-slate-200 flex justify-between items-center px-4 md:px-8 shadow-sm">
@@ -105,28 +300,40 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
           <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center text-white">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M3 21v-2a7 7 0 0 1 14 0v2"/></svg>
           </div>
-          <h1 className="text-lg font-bold text-slate-800 tracking-tight">User Administration</h1>
+          <h1 className="text-lg font-bold text-slate-800 tracking-tight">Administration</h1>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-slate-500 text-sm hidden sm:block">Welcome, <span className="font-semibold text-slate-700">{user.name}</span></span>
           <button onClick={onLogout} className="px-4 py-2 text-sm font-semibold text-white bg-sky-500 rounded-xl shadow-sm hover:bg-sky-600 transition-colors">Logout</button>
         </div>
       </header>
-      <div
-        className="border-b border-amber-200/80 bg-amber-50/95 px-4 py-2.5 md:px-8"
-        role="status"
-      >
-        <div className="max-w-7xl mx-auto flex items-start gap-2 md:gap-3">
-          <span className="mt-0.5 shrink-0 text-amber-600" aria-hidden>
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-          </span>
-          <p className="text-xs md:text-sm text-amber-900/90 leading-relaxed">
-            <span className="font-semibold">Before end users add entries:</span>{' '}
-            ask them to complete <span className="font-medium">projects</span>, <span className="font-medium">subprojects</span>, <span className="font-medium">tasks</span>, <span className="font-medium">team members</span>, and <span className="font-medium">stakeholder</span> (and company) details in the <span className="font-semibold">Configuration</span> tab in the app.
-          </p>
-        </div>
-      </div>
       <main className="p-4 md:p-8 max-w-7xl mx-auto">
+        <div className="flex gap-2 mb-6 border-b border-slate-200">
+          <button
+            type="button"
+            onClick={() => setMainTab('team')}
+            className={`px-4 py-2.5 text-sm font-bold rounded-t-xl border-b-2 -mb-px transition-colors ${
+              mainTab === 'team'
+                ? 'border-sky-500 text-sky-600 bg-white'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Team Members
+          </button>
+          <button
+            type="button"
+            onClick={() => setMainTab('activities')}
+            className={`px-4 py-2.5 text-sm font-bold rounded-t-xl border-b-2 -mb-px transition-colors ${
+              mainTab === 'activities'
+                ? 'border-sky-500 text-sky-600 bg-white'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Activities configuration
+          </button>
+        </div>
+
+        {mainTab === 'team' && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -178,6 +385,29 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
                     </select>
                   </div>
                 )}
+                {formData.roles.includes('Employee') && (
+                  <div className="col-span-full">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Activity tags</label>
+                    <div className="flex flex-wrap gap-2 px-3 py-2.5 border-2 border-slate-200 rounded-xl bg-white shadow-sm">
+                      {tagsLoading && <span className="text-sm text-slate-400">Loading tags…</span>}
+                      {!tagsLoading && activityTags.length === 0 && (
+                        <span className="text-sm text-amber-700">No tags yet. Add tags under Activities configuration.</span>
+                      )}
+                      {activityTags.map((t) => (
+                        <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.activityTagIds?.includes(t.id)}
+                            onChange={() => toggleUserTag(t.id)}
+                            className="w-4 h-4 rounded border-slate-300 text-sky-500 focus:ring-sky-400"
+                          />
+                          <span className="font-medium text-slate-700">{t.name}</span>
+                          {t.slug === 'common' && <span className="text-[10px] text-slate-400">(default)</span>}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="col-span-full flex justify-end gap-3 pt-2 border-t border-slate-200 mt-1">
                   <button type="button" onClick={() => setIsFormOpen(false)} className="px-5 py-2 bg-white border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
                   <button type="submit" className="px-6 py-2 bg-brand-blue text-white rounded-xl text-sm font-semibold hover:bg-brand-blue-mid transition-all shadow-md shadow-brand-blue/20">{editingUser ? 'Update User' : 'Create User'}</button>
@@ -190,7 +420,7 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
             <table className="min-w-full">
               <thead>
                 <tr className="bg-slate-50 border-y border-slate-100">
-                  {['Name', 'Email', 'Roles', 'Reports To', 'Active', 'Actions'].map((h) => (
+                  {['Name', 'Email', 'Roles', 'Activity tags', 'Reports To', 'Active', 'Actions'].map((h) => (
                     <th key={h} className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -213,6 +443,23 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
                           <span key={r} className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${r === 'Manager' ? 'bg-brand-blue-faint text-brand-blue' : r === 'Employee' ? 'bg-brand-green-light text-brand-green-dark' : 'bg-slate-100 text-slate-600'}`}>{r}</span>
                         ))}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600 max-w-xs">
+                      {u.roles?.includes('Employee') ? (
+                        u.activityTagIds?.length ? (
+                          u.activityTagIds.map((tag) => {
+                            const id = typeof tag === 'object' && tag?.id ? tag.id : tag;
+                            const label = typeof tag === 'object' && tag?.name ? tag.name : activityTags.find((x) => x.id === id)?.name || id;
+                            return (
+                              <span key={id} className="inline-block mr-1 mb-1 px-2 py-0.5 rounded-md text-xs bg-slate-100 text-slate-700">{label}</span>
+                            );
+                          })
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{u.reportsTo ? allUsers.find((m) => m.id === u.reportsTo)?.name : <span className="text-slate-300">—</span>}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -237,6 +484,122 @@ export default function SuperadminView({ user, onLogout, allUsers, setUsers }) {
             </table>
           </div>
         </div>
+        )}
+
+        {mainTab === 'activities' && (
+          <div className="space-y-8">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800 tracking-tight">Activity tags</h2>
+                  <p className="text-sm text-slate-400 mt-0.5">Labels used to group activity types and scope them to employees.</p>
+                </div>
+                <button type="button" onClick={openNewTag} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-brand-blue rounded-xl shadow-md shadow-brand-blue/20 hover:bg-brand-blue-mid w-full md:w-auto justify-center"><PlusIcon /> Add tag</button>
+              </div>
+              {tagFormOpen && (
+                <form onSubmit={submitTag} className="mx-6 my-5 bg-slate-50 border border-slate-200 rounded-2xl p-5 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Name</label>
+                    <input className="w-full px-3 py-2 border-2 border-slate-200 rounded-xl text-sm" value={tagForm.name} onChange={(e) => setTagForm({ ...tagForm, name: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Slug</label>
+                    <input className="w-full px-3 py-2 border-2 border-slate-200 rounded-xl text-sm font-mono" value={tagForm.slug} onChange={(e) => setTagForm({ ...tagForm, slug: e.target.value })} required disabled={editingTag?.slug === 'common'} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setTagFormOpen(false)} className="px-4 py-2 border-2 border-slate-200 rounded-xl text-sm font-semibold">Cancel</button>
+                    <button type="submit" className="px-4 py-2 bg-brand-blue text-white rounded-xl text-sm font-semibold">{editingTag ? 'Save' : 'Create'}</button>
+                  </div>
+                </form>
+              )}
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="bg-slate-50 border-y border-slate-100">
+                      {['Name', 'Slug', 'Sort', 'Actions'].map((h) => (
+                        <th key={h} className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activityTags.map((t) => (
+                      <tr key={t.id} className="border-b border-slate-50">
+                        <td className="px-6 py-3 text-sm font-medium text-slate-800">{t.name}</td>
+                        <td className="px-6 py-3 text-sm font-mono text-slate-600">{t.slug}</td>
+                        <td className="px-6 py-3 text-sm text-slate-500">{t.sortOrder ?? 0}</td>
+                        <td className="px-6 py-3">
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => openEditTag(t)} className="p-1 text-slate-400 hover:text-brand-blue"><EditIcon /></button>
+                            <button type="button" onClick={() => deleteTag(t)} className="p-1 text-slate-400 hover:text-brand-red disabled:opacity-30" disabled={t.slug === 'common'}><DeleteIcon /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800 tracking-tight">Activity types</h2>
+                  <p className="text-sm text-slate-400 mt-0.5">Each type belongs to one tag. Employees only see types for tags assigned to them.</p>
+                </div>
+                <button type="button" onClick={openNewType} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-brand-blue rounded-xl shadow-md shadow-brand-blue/20 hover:bg-brand-blue-mid w-full md:w-auto justify-center"><PlusIcon /> Add activity type</button>
+              </div>
+              {typeFormOpen && (
+                <form onSubmit={submitType} className="mx-6 my-5 bg-slate-50 border border-slate-200 rounded-2xl p-5 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div className="md:col-span-1">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Name</label>
+                    <input className="w-full px-3 py-2 border-2 border-slate-200 rounded-xl text-sm" value={typeForm.name} onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tag</label>
+                    <select className="w-full px-3 py-2 border-2 border-slate-200 rounded-xl text-sm" value={typeForm.tagId} onChange={(e) => setTypeForm({ ...typeForm, tagId: e.target.value })} required>
+                      <option value="">Select tag…</option>
+                      {activityTags.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setTypeFormOpen(false)} className="px-4 py-2 border-2 border-slate-200 rounded-xl text-sm font-semibold">Cancel</button>
+                    <button type="submit" className="px-4 py-2 bg-brand-blue text-white rounded-xl text-sm font-semibold">{editingType ? 'Save' : 'Create'}</button>
+                  </div>
+                </form>
+              )}
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="bg-slate-50 border-y border-slate-100">
+                      {['Name', 'Tag', 'Actions'].map((h) => (
+                        <th key={h} className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedTypes.map((t) => {
+                      const tg = typeof t.tagId === 'object' ? t.tagId : null;
+                      return (
+                        <tr key={t.id} className="border-b border-slate-50">
+                          <td className="px-6 py-3 text-sm font-medium text-slate-800">{t.name}</td>
+                          <td className="px-6 py-3 text-sm text-slate-600">{tg?.name || '—'}</td>
+                          <td className="px-6 py-3">
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => openEditType(t)} className="p-1 text-slate-400 hover:text-brand-blue"><EditIcon /></button>
+                              <button type="button" onClick={() => deleteType(t)} className="p-1 text-slate-400 hover:text-brand-red"><DeleteIcon /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
       <Toast toasts={toasts} onRemove={removeToast} />
       {ConfirmModal}

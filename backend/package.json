@@ -6,7 +6,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "migrate:activity-tags": "node scripts/migrateActivityTags.js",
+    "seed:common-activity-tag": "node scripts/seedCommonActivityTag.js",
+    "seed:activity-catalog": "node scripts/seedActivityCatalog.js",
+    "migrate:time-entry-activities": "node scripts/migrateTimeEntryActivityTypes.js"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { marked } from 'marked';
 import { AiWandIcon } from '../common/Icons';
 import api from '../../api';
+import { getActivityTypeIds } from '../../utils/timeEntryActivities';
 
 const MIN_CHARS = 100;
 const MAX_CHARS = 300;
@@ -13,7 +14,9 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
   const [projectId, setProjectId] = useState(initialData?.projectId || '');
   const [subProjectIds, setSubProjectIds] = useState(initialData?.subProjectIds || (initialData?.subProjectId ? [initialData.subProjectId] : []));
   const [taskIds, setTaskIds] = useState(initialData?.taskIds || (initialData?.taskId ? [initialData.taskId] : []));
-  const [activityTypeId, setActivityTypeId] = useState(initialData?.activityTypeId || '');
+  const [activityTypeIds, setActivityTypeIds] = useState(() =>
+    getActivityTypeIds(initialData || {})
+  );
   const [priority, setPriority] = useState(initialData?.priority || 'Medium');
   const [workLocation, setWorkLocation] = useState(initialData?.workLocation || 'Office');
   const [teamMemberIds, setTeamMemberIds] = useState(initialData?.teamMemberIds || []);
@@ -41,7 +44,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       setProjectId(initialData.projectId || '');
       setSubProjectIds(initialData.subProjectIds || (initialData.subProjectId ? [initialData.subProjectId] : []));
       setTaskIds(initialData.taskIds || (initialData.taskId ? [initialData.taskId] : []));
-      setActivityTypeId(initialData.activityTypeId || '');
+      setActivityTypeIds(getActivityTypeIds(initialData));
       setPriority(initialData.priority || 'Medium');
       setWorkLocation(initialData.workLocation || 'Office');
       setTeamMemberIds(initialData.teamMemberIds || []);
@@ -115,29 +118,58 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     try {
       const result = await api.fillEntryByAI(aiPrompt);
 
-      // Auto-select project
+      // Auto-select project, sub-projects, tasks
       if (result.projectId) {
-        // Check it belongs to this user
         const matchedProject = userProjects.find((p) => p.id === result.projectId);
         if (matchedProject) {
           setProjectId(matchedProject.id);
-          // After project set, check subproject
-          if (result.subProjectId) {
-            const matchedSub = fullDb.subProjects.find(
-              (sp) => sp.id === result.subProjectId && sp.projectId === matchedProject.id
-            );
-            if (matchedSub) setSubProjectIds([matchedSub.id]);
-            else setSubProjectIds([]);
-          } else {
-            setSubProjectIds([]);
+
+          let rawSpIds = [];
+          if (Array.isArray(result.subProjectIds) && result.subProjectIds.length) {
+            rawSpIds = result.subProjectIds;
+          } else if (result.subProjectId) {
+            rawSpIds = [result.subProjectId];
           }
+
+          const subOk = (sp) =>
+            sp.projectId === matchedProject.id && teamUserIds.includes(sp.createdBy);
+
+          let nextSubIds = rawSpIds.filter((spid) => fullDb.subProjects.some((sp) => sp.id === spid && subOk(sp)));
+
+          const incomingTaskIds = Array.isArray(result.taskIds) ? result.taskIds : [];
+          const resolveTask = (tid) => (fullDb.tasks || []).find((tt) => tt.id === tid);
+          const tasksForProject = incomingTaskIds
+            .map((tid) => resolveTask(tid))
+            .filter(
+              (t) =>
+                t &&
+                fullDb.subProjects.some((sp) => sp.id === t.subProjectId && subOk(sp)) &&
+                teamUserIds.includes(t.createdBy)
+            );
+
+          if (!nextSubIds.length && tasksForProject.length) {
+            nextSubIds = [...new Set(tasksForProject.map((t) => t.subProjectId))];
+          }
+
+          setSubProjectIds(nextSubIds.length ? nextSubIds : []);
+
+          const allowedSp = new Set(nextSubIds);
+          const validTaskIds =
+            incomingTaskIds.length && allowedSp.size
+              ? incomingTaskIds.filter((tid) => {
+                  const t = resolveTask(tid);
+                  return t && allowedSp.has(t.subProjectId) && teamUserIds.includes(t.createdBy);
+                })
+              : tasksForProject.map((t) => t.id);
+
+          setTaskIds(validTaskIds);
         }
       }
 
-      // Auto-select activity type
-      if (result.activityTypeId) {
-        const matchedActivity = userActivityTypes.find((a) => a.id === result.activityTypeId);
-        if (matchedActivity) setActivityTypeId(matchedActivity.id);
+      const aiIds = Array.isArray(result.activityTypeIds) ? result.activityTypeIds : result.activityTypeId ? [result.activityTypeId] : [];
+      if (aiIds.length) {
+        const valid = aiIds.filter((id) => userActivityTypes.some((a) => a.id === id));
+        if (valid.length) setActivityTypeIds(valid);
       }
 
       // Fill description
@@ -162,9 +194,11 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
     }
   };
 
-  const selectedActivityName = userActivityTypes.find((a) => a.id === activityTypeId)?.name?.toLowerCase() || '';
-  const isLunchBreak = selectedActivityName === 'lunch/break';
-  const isHoliday = selectedActivityName === 'holiday';
+  const selectedActivityNames = activityTypeIds
+    .map((id) => userActivityTypes.find((a) => a.id === id)?.name?.toLowerCase())
+    .filter(Boolean);
+  const isLunchBreak = selectedActivityNames.some((n) => n === 'lunch/break');
+  const isHoliday = selectedActivityNames.some((n) => n === 'holiday');
   const isSpecialMode = isLunchBreak || isHoliday;
 
   const handleSubmit = (e) => {
@@ -174,7 +208,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       if (!projectId) { setFormError('Please select a Project.'); return; }
       if (subProjectIds.length === 0) { setFormError('Please select at least one Sub-Project.'); return; }
     }
-    if (!activityTypeId) { setFormError('Please select an Activity Type.'); return; }
+    if (!activityTypeIds.length) { setFormError('Please select at least one Activity Type.'); return; }
     if (hours <= 0) { setFormError('End time must be after start time.'); return; }
     onSaveEntry({
       id: isEditing ? initialData.id : undefined,
@@ -186,7 +220,7 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
       projectId: isSpecialMode ? undefined : projectId,
       subProjectIds: isSpecialMode ? [] : subProjectIds,
       taskIds: isSpecialMode ? [] : taskIds,
-      activityTypeId,
+      activityTypeIds,
       priority: isSpecialMode ? 'Medium' : priority,
       workLocation: isSpecialMode ? 'Office' : workLocation,
       teamMemberIds: isSpecialMode ? [] : teamMemberIds,
@@ -353,12 +387,18 @@ export default function TimeEntryForm({ userId, onSaveEntry, onClose, fullDb, in
             {/* ── Rest of form fields ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
 
-              {/* Activity Type */}
+              {/* Activity Types (multi) */}
               <div className={isSpecialMode ? 'md:col-span-2' : ''}>
-                <label className={labelClasses}>Activity Type <span className="text-red-400">*</span></label>
-                <select value={activityTypeId} onChange={(e) => setActivityTypeId(e.target.value)} required className={inputClasses}>
-                  <option value="">Select Activity</option>
-                  {userActivityTypes.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                <label className={labelClasses}>Activity Types <span className="text-red-400">*</span> <span className="text-[9px] normal-case text-slate-300 font-normal">(Ctrl/Cmd+click)</span></label>
+                <select
+                  multiple
+                  value={activityTypeIds}
+                  onChange={(e) => setActivityTypeIds(Array.from(e.target.selectedOptions, (o) => o.value))}
+                  className={`${inputClasses} min-h-[7rem]`}
+                >
+                  {userActivityTypes.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
                 </select>
               </div>
 

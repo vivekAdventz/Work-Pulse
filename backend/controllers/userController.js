@@ -1,5 +1,14 @@
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
+import ActivityTag from '../models/ActivityTag.js';
+
+async function ensureCommonTagId() {
+  let common = await ActivityTag.findOne({ slug: 'common' });
+  if (!common) {
+    common = await ActivityTag.create({ name: 'Common', slug: 'common', sortOrder: 0 });
+  }
+  return common._id;
+}
 import TimeEntry from '../models/TimeEntry.js';
 import Project from '../models/Project.js';
 import SubProject from '../models/SubProject.js';
@@ -34,7 +43,7 @@ export const getHierarchy = async (req, res) => {
 
 export const getAll = async (req, res) => {
   if (req.user.roles && req.user.roles.includes('Superadmin')) {
-    const users = await User.find();
+    const users = await User.find().populate('activityTagIds', 'name slug');
     return res.json(users);
   }
   const teamIds = await getTeamUserIds(req.user.userId);
@@ -43,8 +52,14 @@ export const getAll = async (req, res) => {
 };
 
 export const create = async (req, res) => {
-  const { name, email, roles, active, reportsTo } = req.body;
+  const { name, email, roles, active, reportsTo, activityTagIds } = req.body;
   const hashedPassword = await bcrypt.hash('Welcome@1234', 10);
+
+  let tagIds = Array.isArray(activityTagIds) ? activityTagIds : [];
+  if (roles?.includes('Employee') && tagIds.length === 0) {
+    tagIds = [await ensureCommonTagId()];
+  }
+
   const user = await User.create({
     name,
     email,
@@ -52,23 +67,27 @@ export const create = async (req, res) => {
     password: hashedPassword,
     active: active !== undefined ? active : true,
     reportsTo: reportsTo || null,
+    activityTagIds: tagIds,
   });
-  res.status(201).json(user);
+  const populated = await User.findById(user._id).populate('activityTagIds', 'name slug');
+  res.status(201).json(populated);
 };
 
 export const update = async (req, res) => {
   const user = await User.findById(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const { name, email, roles, active, reportsTo } = req.body;
+  const { name, email, roles, active, reportsTo, activityTagIds } = req.body;
   if (name !== undefined) user.name = name;
   if (email !== undefined) user.email = email;
   if (roles !== undefined) user.roles = roles;
   if (active !== undefined) user.active = active;
   if (reportsTo !== undefined) user.reportsTo = reportsTo || null;
+  if (activityTagIds !== undefined) user.activityTagIds = Array.isArray(activityTagIds) ? activityTagIds : [];
 
   await user.save();
-  res.json(user);
+  const populated = await User.findById(user._id).populate('activityTagIds', 'name slug');
+  res.json(populated);
 };
 
 export const remove = async (req, res) => {

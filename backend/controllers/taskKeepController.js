@@ -131,12 +131,14 @@ export const addTask = async (req, res) => {
   const day = await TaskDay.findById(req.params.dayId);
   if (!day) return res.status(404).json({ error: 'Day not found' });
 
-  const { title, description, assigneeId, projectId, status } = req.body;
+  const { title, description, assigneeId, projectId, subProjectId, catalogTaskId, status } = req.body;
   const task = {
     title: String(title || ''),
     description: String(description || ''),
     assigneeId: assigneeId || null,
     projectId: projectId || null,
+    subProjectId: subProjectId || null,
+    catalogTaskId: catalogTaskId || null,
     status: status || 'todo',
     createdBy: req.user.userId,
   };
@@ -182,12 +184,13 @@ export const updateTask = async (req, res) => {
     return res.status(400).json({ error: 'Please select a project before assigning the task' });
   }
 
-  const { title, description, assigneeId, projectId, subProjectId, status, dependsOn } = req.body;
+  const { title, description, assigneeId, projectId, subProjectId, catalogTaskId, status, dependsOn } = req.body;
   if (title !== undefined) task.title = String(title);
   if (description !== undefined) task.description = String(description);
   if (assigneeId !== undefined) task.assigneeId = assigneeId;
   if (projectId !== undefined) task.projectId = projectId;
   if (subProjectId !== undefined) task.subProjectId = subProjectId;
+  if (catalogTaskId !== undefined) task.catalogTaskId = catalogTaskId;
   if (status !== undefined) task.status = status;
   if (dependsOn !== undefined) task.dependsOn = dependsOn;
 

@@ -7,6 +7,10 @@ const userSchema = new mongoose.Schema({
   password: { type: String, select: false },
   active: { type: Boolean, default: true },
   reportsTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  activityTagIds: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ActivityTag' }],
+    default: [],
+  },
   otp: { type: String, select: false },
   otpExpiresAt: { type: Date, select: false }
 });

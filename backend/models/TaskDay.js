@@ -5,6 +5,7 @@ const taskSchema = new mongoose.Schema({
   assigneeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', default: null },
   subProjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubProject', default: null },
+  catalogTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
   description: { type: String, default: '' },
   status: { type: String, enum: ['todo', 'doing', 'done'], default: 'todo' },
   dependsOn: { type: mongoose.Schema.Types.ObjectId, default: null }, // references another task._id in same or earlier day

@@ -12,8 +12,9 @@ import { getTeamUserIds } from '../services/teamService.js';
 
 import Company from '../models/Company.js';
 import Stakeholder from '../models/Stakeholder.js';
-import ActivityType from '../models/ActivityType.js';
 import TeamMember from '../models/TeamMember.js';
+import activityTagsRoutes from './activityTags.js';
+import activityTypesRoutes from './activityTypes.js';
 import Project from '../models/Project.js';
 import SubProject from '../models/SubProject.js';
 import Task from '../models/Task.js';
@@ -32,6 +33,8 @@ router.use('/users', userRoutes);
 router.use('/timeEntries', timeEntryRoutes);
 router.use('/', aiRoutes);
 router.use('/taskKeep', taskKeepRoutes);
+router.use('/activityTags', activityTagsRoutes);
+router.use('/activityTypes', activityTypesRoutes);
 
 // Filter factory for items created within user's team
 const teamScopeFilter = async (req) => {
@@ -44,14 +47,6 @@ const teamScopeFilter = async (req) => {
 // Generic CRUD routes scoped to team
 router.use('/companies', createCrudRouter(Company, teamScopeFilter));
 router.use('/stakeholders', createCrudRouter(Stakeholder, teamScopeFilter));
-router.use('/activityTypes', createCrudRouter(ActivityType, async (req) => {
-  if (req.user.roles && req.user.roles.includes('Superadmin')) return {};
-  // Activity types might be global or team-scoped depending on business logic. 
-  // Let's assume they are team-scoped where needed or fetch all if not scoped.
-  // Original EmployeeView didn't filter activityTypes by teamIds: `const userActivityTypes = useMemo(() => fullDb.activityTypes || [],...);`
-  // So we return everything for activityTypes.
-  return {};
-}));
 router.use('/teamMembers', createCrudRouter(TeamMember, teamScopeFilter));
 router.use('/projects', createCrudRouter(Project, teamScopeFilter));
 router.use('/subProjects', createCrudRouter(SubProject, teamScopeFilter));

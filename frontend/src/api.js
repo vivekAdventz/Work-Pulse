@@ -18,6 +18,8 @@ function getAuthHeaders() {
   const token = localStorage.getItem('authToken');
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  const activeRole = localStorage.getItem('activeRole');
+  if (activeRole) headers['X-Active-Role'] = activeRole;
   return headers;
 }
 
@@ -76,6 +78,10 @@ const api = {
   getSubProjects: () => api.request('/subProjects'),
   getTasks: () => api.request('/tasks'),
   getActivityTypes: () => api.request('/activityTypes'),
+  getActivityTags: () => api.request('/activityTags'),
+  createActivityTag: (data) => api.request('/activityTags', 'POST', data),
+  updateActivityTag: (id, data) => api.request(`/activityTags/${id}`, 'PUT', data),
+  deleteActivityTag: (id) => api.request(`/activityTags/${id}`, 'DELETE'),
   getTeamMembers: () => api.request('/teamMembers'),
   
   getAllData: async () => {
