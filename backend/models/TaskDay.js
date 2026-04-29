@@ -15,6 +15,7 @@ const taskSchema = new mongoose.Schema({
 const taskDaySchema = new mongoose.Schema({
   date: { type: String, required: true }, // YYYY-MM-DD
   managerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   tasks: [taskSchema],
 }, { timestamps: true });
 
